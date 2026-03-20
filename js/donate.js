@@ -2,7 +2,7 @@
  * 打赏页 — 加载排行榜
  */
 (function () {
-  const API_BASE = "https://mwi-api-proxy.colacolamwi.workers.dev";
+  const API_BASE = "https://api-mate.colacola.cloud";
 
   const params = new URLSearchParams(window.location.search);
   const lang = params.get("lang") || "zh";
