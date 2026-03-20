@@ -1,0 +1,234 @@
+/* MWI Market Mate — 前端共享样式 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", -apple-system, sans-serif;
+  background: #0f1117;
+  color: #e4e6ee;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px;
+}
+
+.container {
+  width: 100%;
+  max-width: 480px;
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #fff;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+/* 表单元素 */
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c8cfde;
+  margin-bottom: 6px;
+}
+
+textarea, input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #2a2d37;
+  border-radius: 8px;
+  background: #1b1d24;
+  color: #e4e6ee;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+textarea:focus, input[type="text"]:focus {
+  border-color: rgba(91, 140, 255, 0.5);
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.hint {
+  font-size: 11px;
+  color: #555a72;
+  margin-top: 4px;
+}
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(91, 140, 255, 0.4);
+  border-radius: 8px;
+  background: rgba(91, 140, 255, 0.15);
+  color: #93c5fd;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: rgba(91, 140, 255, 0.25);
+  border-color: rgba(91, 140, 255, 0.6);
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-donate {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+}
+
+.btn-donate:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fff;
+}
+
+/* 消息提示 */
+.msg {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-top: 12px;
+  display: none;
+}
+
+.msg.success {
+  display: block;
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.08);
+  color: #6ee7b7;
+}
+
+.msg.error {
+  display: block;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+}
+
+/* 排行榜表格 */
+.ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.ranking-table th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #2a2d37;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.ranking-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e4e6ee;
+}
+
+.ranking-table tr:first-child td { color: #fcd34d; font-weight: 600; }
+.ranking-table tr:nth-child(2) td { color: #d1d5db; font-weight: 500; }
+.ranking-table tr:nth-child(3) td { color: #cd7f32; font-weight: 500; }
+
+.amount { color: #f8c86b; font-weight: 600; }
+
+.empty-ranking {
+  text-align: center;
+  padding: 24px;
+  color: #555a72;
+  font-size: 13px;
+}
+
+/* QR 码区域 */
+.qr-section {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.qr-card {
+  text-align: center;
+  padding: 16px;
+  border: 1px solid #2a2d37;
+  border-radius: 12px;
+  background: #1b1d24;
+}
+
+.qr-card img {
+  width: 160px;
+  height: 160px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.qr-label {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* 页脚 */
+.footer {
+  margin-top: 32px;
+  font-size: 11px;
+  color: #3a3d4a;
+  text-align: center;
+}
+
+.footer a {
+  color: #555a72;
+  text-decoration: none;
+}
+
+.footer a:hover { color: #93c5fd; }
+
+/* 加载动画 */
+.loading {
+  text-align: center;
+  padding: 24px;
+  color: #6b7280;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 24px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #2a2d37;
+}
