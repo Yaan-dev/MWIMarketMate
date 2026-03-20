@@ -2,7 +2,6 @@
  * 打赏页 — 加载排行榜
  */
 (function () {
-  // TODO: 部署后替换为你的 Worker 地址
   const API_BASE = "https://mwi-api-proxy.colacolamwi.workers.dev";
 
   const params = new URLSearchParams(window.location.search);
@@ -13,7 +12,6 @@
     document.getElementById("title").textContent = "❤ Support the Author";
     document.getElementById("subtitle").textContent = "Your support keeps development going!";
     document.getElementById("labelWechat").textContent = "WeChat Pay";
-    document.getElementById("labelAlipay").textContent = "Alipay";
     document.getElementById("rankingTitle").textContent = "🏆 Donor Ranking";
     document.getElementById("loadingText").textContent = "Loading...";
     document.getElementById("backText").textContent = "Back to Home";
