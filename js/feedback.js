@@ -2,7 +2,7 @@
  * 功能建议页 — 提交逻辑
  */
 (function () {
-  const API_BASE = "https://mwi-api-proxy.colacolamwi.workers.dev";
+  const API_BASE = "https://api-mate.colacola.cloud";
 
   // 从 URL 读取参数
   const params = new URLSearchParams(window.location.search);
