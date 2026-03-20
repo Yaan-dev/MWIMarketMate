@@ -1,0 +1,5539 @@
+// ==UserScript==
+// @name         MWI 市场伴侣
+// @name:en      MWI Market Mate
+// @name:zh-CN   MWI 市场伴侣
+// @namespace    https://milkywayidle.com/
+// @version      1.4.3
+// @description  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
+// @description:en  Crafting/housing material auto-calc, shortage display, shopping list, market highlight. WS inventory + data layer. Bilingual (EN/ZH).
+// @description:zh-CN  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
+// @author       ColaCola
+// @license      MIT
+// @match        https://www.milkywayidle.com/*
+// @match        https://milkywayidle.com/*
+// @match        https://www.milkywayidlecn.com/*
+// @match        https://milkywayidlecn.com/*
+// @icon         https://www.milkywayidle.com/favicon.svg
+// @grant        none
+// @run-at       document-idle
+// @downloadURL https://update.greasyfork.org/scripts/567386/MWI%20%E5%B8%82%E5%9C%BA%E4%BC%B4%E4%BE%A3.user.js
+// @updateURL https://update.greasyfork.org/scripts/567386/MWI%20%E5%B8%82%E5%9C%BA%E4%BC%B4%E4%BE%A3.meta.js
+// ==/UserScript==
+
+(function () {
+    "use strict";
+
+    /** 脚本元信息及 localStorage 键名 */
+    const SCRIPT = {
+        id: "mwi-missing-cart-cn",
+        version: "1.4.3",
+        cartKey: "mwi_missing_cart_v1",         // 购物车持久化
+        plansKey: "mwi_crafting_plans_v1",      // 制作计划持久化
+        fabPosKey: "mwi_missing_cart_fab_pos_v1",    // FAB 悬浮按钮位置
+        drawerPosKey: "mwi_missing_cart_drawer_pos_v1",  // 面板位置
+        drawerSizeKey: "mwi_missing_cart_drawer_size_v2", // 面板尺寸
+        togglesKey: "mwi_missing_cart_toggles_v1",   // 开关状态
+        plansPosKey: "mwi_crafting_plans_pos_v1"     // 制作计划面板位置
+    };
+
+    /** 游戏 DOM 选择器（技能制作面板 & 房屋建造面板） */
+    const SEL = {
+        detailRoot: '[class*="SkillActionDetail_skillActionDetail"]',       // 技能详情根节点
+        regularComponent: '[class*="SkillActionDetail_regularComponent"]', // 常规材料区域
+        requirements: '[class*="SkillActionDetail_itemRequirements"]',     // 材料需求容器
+        requirementItems: '[class*="Item_itemContainer"]',                 // 单个材料项
+        requirementInventory: '[class*="SkillActionDetail_inventoryCount"]', // 库存数量
+        requirementInput: '[class*="SkillActionDetail_inputCount"]',       // 所需数量
+        upgradeContainer: '[class*="SkillActionDetail_upgradeItemSelectorInput"]', // 升级物品选择器
+        actionCountInput: '[class*="SkillActionDetail_maxActionCountInput"] input[class*="Input_input"]', // 行动次数输入
+        actionContainer: '[class*="SkillActionDetail_actionContainer"]',   // 行动容器
+        itemCore: '[class*="Item_item__"]',         // 物品核心元素
+        itemCount: '[class*="Item_count"]',          // 物品数量标签
+        houseRoot: '[class*="HousePanel_modalContent"]',        // 房屋面板根
+        houseRequirements: '[class*="HousePanel_itemRequirements"]', // 房屋材料需求
+        houseInventory: '[class*="HousePanel_inventoryCount"]',     // 房屋库存显示
+        houseInput: '[class*="HousePanel_inputCount"]',             // 房屋所需数量
+        houseCosts: '[class*="HousePanel_costs"]',                  // 房屋费用
+        houseUpgradeBtn: '[class*="HousePanel_upgradeButton"]'      // 房屋升级按钮
+    };
+
+    // ── v1.3.1: 市场弹窗选择器 ────────────────────────────────
+    const MARKET_SEL = {
+        modalContainer: '[class*="Modal_modalContainer"]',
+        modalContent: '[class*="MarketplacePanel_modalContent"]',
+        header: '[class*="MarketplacePanel_header"]',
+        itemIcon: '[class*="MarketplacePanel_itemContainer"] svg use',
+        priceInput: '[class*="MarketplacePanel_priceInput"]',
+        quantityContainer: '[class*="MarketplacePanel_quantityInputs"]',
+        quantityInput: '[class*="MarketplacePanel_quantityInputs"] input[class*="Input_input"]',
+        submitButton: 'button[class*="Button_success"]',
+        labelElement: '[class*="MarketplacePanel_label"]',
+        marketPanel: '[class*="MarketplacePanel_marketplacePanel"]',
+    };
+
+    /** 购物车列表默认最大高度（px） */
+    const CART_LIST_MAX_HEIGHT_DEFAULT = 406;
+
+    // ── v1.4.0: 国际化 (i18n) 双语支持 ─────────────────────────────
+    //   语言通过设置面板手动切换，持久化到 localStorage。
+
+    let _currentLang = "zh"; // 默认中文，可在设置中切换
+
+    /** 从 localStorage 读取语言偏好 */
+    function _loadLangPref() {
+        try {
+            const v = localStorage.getItem("mwi_mm_lang_v1");
+            if (v === "en" || v === "zh") _currentLang = v;
+        } catch { /* ignore */ }
+    }
+    /** 保存语言偏好到 localStorage */
+    function _saveLangPref() {
+        try { localStorage.setItem("mwi_mm_lang_v1", _currentLang); } catch { /* ignore */ }
+    }
+
+    /** 获取当前 locale（用于 localeCompare 排序） */
+    function _getLocale() {
+        return _currentLang === "zh" ? "zh-Hans-CN" : "en";
+    }
+
+    // 启动时立即读取偏好
+    _loadLangPref();
+
+    /** 翻译映射表 */
+    const _I18N = {
+        // ── 通用 ──
+        "init":                  { zh: "初始化中...", en: "Initializing..." },
+        "unknown_item":          { zh: "未知物品", en: "Unknown Item" },
+        "upgrade_item":          { zh: "升级物品", en: "Upgrade Item" },
+        "item":                  { zh: "物品", en: "Item" },
+
+        // ── FAB / 面板标题 ──
+        "shopping_list":         { zh: "购物清单", en: "Shopping List" },
+        "shopping_list_count":   { zh: "购物清单，{0} 种物品", en: "Shopping List, {0} items" },
+        "crafting_plans":        { zh: "制作计划", en: "Crafting Plans" },
+
+        // ── 购物车面板按钮 ──
+        "pick_from_inv":         { zh: "从背包添加", en: "Pick from Bag" },
+        "confirm_pick":          { zh: "✅ 确认选择", en: "✅ Confirm" },
+        "clear":                 { zh: "清空", en: "Clear" },
+        "clear_non_starred":     { zh: "清空非收藏", en: "Clear Non-Starred" },
+        "keep_starred":          { zh: "保留 ⭐ 收藏物品", en: "Keep ⭐ starred items" },
+        "clear_all_warn":        { zh: "⚠ 清空全部", en: "⚠ Clear All" },
+        "incl_starred":          { zh: "包括收藏物品", en: "Including starred" },
+        "settings":              { zh: "⚙ 设置", en: "⚙ Settings" },
+        "collapse":              { zh: "收起", en: "Collapse" },
+        "toggle_plans":          { zh: "展开/收起制作计划", en: "Toggle Crafting Plans" },
+        "search_placeholder":    { zh: "搜索物品...", en: "Search items..." },
+        "resize_hint":           { zh: "拖动调整大小", en: "Drag to resize" },
+        "go_to_market":          { zh: "直达市场", en: "Go to Market" },
+        "remove":                { zh: "移除", en: "Remove" },
+        "star_pin":              { zh: "收藏置顶", en: "Star & Pin" },
+        "market_icon_tip":       { zh: "一键前往市场并设置定位", en: "Go to market & locate" },
+
+        // ── 购物车内容 ──
+        "shortage":              { zh: "缺料", en: "Short" },
+        "shortage_n":            { zh: "缺{0}", en: "Need {0}" },
+        "fulfilled":             { zh: "✓ 已补齐", en: "✓ Fulfilled" },
+        "auto_refill":           { zh: "⟲ 自动回填", en: "⟲ Auto-refill" },
+        "qty_reactivate_tip":    { zh: "输入数量可重新激活", en: "Enter qty to reactivate" },
+        "empty_cart":            { zh: "购物清单为空", en: "Shopping list is empty" },
+        "no_match":              { zh: '没有匹配 "{0}" 的物品', en: 'No items matching "{0}"' },
+
+        // ── 常备量 ──
+        "threshold_sufficient":  { zh: "充足", en: "OK" },
+        "threshold_low":         { zh: "低于阈值", en: "Below" },
+        "threshold_label":       { zh: "常备", en: "Reserve" },
+        "stock_label":           { zh: "库存", en: "Stock" },
+        "set_threshold":         { zh: "+ 设置常备量", en: "+ Set Reserve" },
+        "click_edit_threshold":  { zh: "点击修改常备量", en: "Click to edit reserve" },
+        "edit_threshold_title":  { zh: "修改常备数量", en: "Edit Reserve Qty" },
+        "set_threshold_title":   { zh: "设置常备数量", en: "Set Reserve Qty" },
+        "threshold_desc":        { zh: "当库存低于此数量时，自动回填缺料到购物车。", en: "Auto-refill shortage when stock falls below this amount." },
+        "threshold_amount":      { zh: "常备量", en: "Reserve" },
+        "threshold_placeholder": { zh: "例如 500", en: "e.g. 500" },
+        "threshold_unit":        { zh: "个", en: "pcs" },
+        "current_stock":         { zh: "当前库存：{0}", en: "Current stock: {0}" },
+        "clear_threshold":       { zh: "清除常备", en: "Clear Reserve" },
+        "cancel":                { zh: "取消", en: "Cancel" },
+        "confirm":               { zh: "确认", en: "Confirm" },
+        "threshold_preview_short": { zh: "当前库存：{0} → 缺料 = {1} − {2} = {3}", en: "Stock: {0} → Shortage = {1} − {2} = {3}" },
+        "threshold_preview_ok":  { zh: "当前库存：{0} → 库存充足", en: "Stock: {0} → Sufficient" },
+
+        // ── 设置面板 ──
+        "s_lock_panel":          { zh: "锁定面板", en: "Lock Panel" },
+        "s_lock_panel_desc":     { zh: "开启后点击外部区域不会收起面板", en: "Panel stays open when clicking outside" },
+        "s_market_locate":       { zh: "市场定位", en: "Market Locate" },
+        "s_market_locate_desc":  { zh: "直达市场时高亮购物车中匹配的物品", en: "Highlight matching items when navigating to market" },
+        "s_incl_upgrade":        { zh: "包含升级物品", en: "Include Upgrades" },
+        "s_incl_upgrade_desc":   { zh: '关闭后不计算「升级自」栏的物品，也不加入购物车', en: "Exclude upgrade slot items from calculation and cart" },
+        "s_inv_sync":            { zh: "背包库存同步", en: "Inventory Sync" },
+        "s_inv_sync_desc":       { zh: "监听WS与背包变化，购买后实时扣减购物清单", en: "Auto-deduct from list when items are purchased via WS" },
+        "s_auto_collapse":       { zh: "补齐自动收起", en: "Auto-Collapse" },
+        "s_auto_collapse_desc":  { zh: "购物清单物品被库存同步全部清空后自动收起面板", en: "Auto-collapse panel when all items fulfilled" },
+        "s_auto_prefill":        { zh: "市场预填数量", en: "Market Pre-fill" },
+        "s_auto_prefill_desc":   { zh: "打开市场购买弹窗时自动将缺料数量填入数量框", en: "Auto-fill shortage qty in market buy dialog" },
+        "s_purchase_nav":        { zh: "采购导航条", en: "Purchase Nav Bar" },
+        "s_purchase_nav_desc":   { zh: "市场弹窗底部显示购物车物品导航，快速切换", en: "Show cart items nav bar below market panel" },
+        "s_crafting_plans":      { zh: "制作计划", en: "Crafting Plans" },
+        "s_crafting_plans_desc": { zh: "开启制作计划与库存锁定功能，关闭后不再创建计划也不扣减锁定库存", en: "Enable crafting plan tracking & inventory locking" },
+        "s_manual_sync":         { zh: "立即同步", en: "Manual Sync" },
+        "s_manual_sync_desc":    { zh: "手动触发一次库存同步", en: "Trigger inventory sync manually" },
+        "s_manual_sync_btn":     { zh: "🔄 同步", en: "🔄 Sync" },
+        "s_reset_size":          { zh: "重置面板大小", en: "Reset Panel Size" },
+        "s_reset_size_desc":     { zh: "恢复购物清单面板为默认自适应尺寸", en: "Restore panel to default size" },
+        "s_reset_btn":           { zh: "↩ 重置", en: "↩ Reset" },
+        "s_data_source":         { zh: "数据源", en: "Data Source" },
+        "s_language":            { zh: "界面语言", en: "Language" },
+        "s_language_desc":       { zh: "切换插件界面语言（需要重新打开面板生效）", en: "Switch plugin UI language (reopen panel to apply)" },
+        "s_lang_zh":             { zh: "中文", en: "中文" },
+        "s_lang_en":             { zh: "EN", en: "EN" },
+        "toggle_on":             { zh: "开", en: "ON" },
+        "toggle_off":            { zh: "关", en: "OFF" },
+
+        // ── 摘要面板 ──
+        "summary_missing":       { zh: "缺 {0} 种 / {1} 件", en: "{0} types / {1} pcs short" },
+        "summary_sufficient":    { zh: "材料充足", en: "Materials sufficient" },
+        "add_to_cart":           { zh: "加入购物清单", en: "Add to Shopping List" },
+        "plan_count_label":      { zh: "计划次数", en: "Planned actions" },
+        "data_layer_tag":        { zh: "⚡数据层", en: "⚡DataLayer" },
+        "artisan_tag":           { zh: "工匠-{0}%", en: "Artisan-{0}%" },
+        "has_plan_tag":          { zh: "已有计划", en: "Has Plan" },
+
+        // ── 制作计划面板 ──
+        "plan_clear_all":        { zh: "清空", en: "Clear" },
+        "plan_remove":           { zh: "移除计划", en: "Remove Plan" },
+        "plan_waiting":          { zh: "等待制作", en: "Waiting" },
+        "plan_inv_lock":         { zh: "库存锁定", en: "Inv. Locked" },
+        "plan_stale":            { zh: "⏰ 超过24小时，可能已过期", en: "⏰ Over 24h, may be stale" },
+
+        // ── 采购导航 ──
+        "nav_short":             { zh: "缺 {0}", en: "Need {0}" },
+        "nav_item_done":         { zh: "✅ {0} 已购齐", en: "✅ {0} fulfilled" },
+        "nav_next_label":        { zh: "下一项：{0} ×{1}", en: "Next: {0} ×{1}" },
+        "nav_next_btn":          { zh: "采购下一个 ▶", en: "Next item ▶" },
+        "nav_all_done":          { zh: "🎉 购物清单全部购齐！", en: "🎉 All items purchased!" },
+        "prefill_tag":           { zh: "已预填", en: "Pre-filled" },
+
+        // ── Toast 消息 ──
+        "toast_plan_done":       { zh: "✅ 制作计划完成：{0}", en: "✅ Crafting plan done: {0}" },
+        "toast_auto_removed":    { zh: "已自动移除 {0} 种已补齐的物品", en: "Auto-removed {0} fulfilled item(s)" },
+        "toast_refill_one":      { zh: "「{0}」库存不足，已自动回填缺料", en: '"{0}" stock low, auto-refilled shortage' },
+        "toast_refill_multi":    { zh: "「{0}」等 {1} 种物品库存不足，已自动回填", en: '"{0}" and {1} other item(s) low, auto-refilled' },
+        "toast_all_fulfilled":   { zh: "购物清单已全部补齐，自动收起", en: "All items fulfilled, auto-collapsed" },
+        "toast_pick_hint":       { zh: "点击背包中的物品进行选择，完成后点击「确认选择」", en: "Click bag items to select, then click Confirm" },
+        "toast_unrecognized":    { zh: "无法识别此物品", en: "Cannot identify this item" },
+        "toast_no_pick":         { zh: "未选择任何物品", en: "No items selected" },
+        "toast_picked_n":        { zh: "已添加 {0} 种物品到购物清单", en: "Added {0} item(s) to shopping list" },
+        "toast_plans_cleared":   { zh: "已清空所有制作计划", en: "All crafting plans cleared" },
+        "toast_plan_removed":    { zh: "已移除制作计划", en: "Crafting plan removed" },
+        "toast_all_starred":     { zh: "所有物品均已收藏，请使用 ▾ 下拉菜单清空全部", en: "All items starred. Use ▾ dropdown to clear all" },
+        "toast_cleared_kept":    { zh: "已清空 {0} 项，保留 {1} 个收藏物品", en: "Cleared {0} items, kept {1} starred" },
+        "toast_cart_cleared":    { zh: "购物清单已清空", en: "Shopping list cleared" },
+        "toast_cart_all_cleared":{ zh: "购物清单已全部清空", en: "Shopping list fully cleared" },
+        "toast_plans_disabled":  { zh: "制作计划功能已关闭，请在设置中开启", en: "Crafting plans disabled. Enable in settings" },
+        "toast_locate_on":       { zh: "定位已开启", en: "Locate enabled" },
+        "toast_locate_off":      { zh: "定位已关闭", en: "Locate disabled" },
+        "toast_upgrade_on":      { zh: "已包含升级物品", en: "Upgrades included" },
+        "toast_upgrade_off":     { zh: "已排除升级物品", en: "Upgrades excluded" },
+        "toast_sync_on":         { zh: "背包同步已开启（{0}）", en: "Inventory sync enabled ({0})" },
+        "toast_sync_off":        { zh: "背包同步已关闭", en: "Inventory sync disabled" },
+        "toast_autocollapse_on": { zh: "补齐自动收起已开启", en: "Auto-collapse enabled" },
+        "toast_autocollapse_off":{ zh: "补齐自动收起已关闭", en: "Auto-collapse disabled" },
+        "toast_prefill_on":      { zh: "市场预填已开启", en: "Market pre-fill enabled" },
+        "toast_prefill_off":     { zh: "市场预填已关闭", en: "Market pre-fill disabled" },
+        "toast_nav_on":          { zh: "采购导航已开启", en: "Purchase nav enabled" },
+        "toast_nav_off":         { zh: "采购导航已关闭", en: "Purchase nav disabled" },
+        "toast_plans_on":        { zh: "制作计划功能已开启", en: "Crafting plans enabled" },
+        "toast_plans_off":       { zh: "制作计划功能已关闭（库存锁定同步停用）", en: "Crafting plans disabled (inventory lock off)" },
+        "toast_no_inv":          { zh: "❌ 未读取到库存", en: "❌ No inventory data" },
+        "toast_sync_done":       { zh: "✅ 同步完成（{0}源，{1} 种）", en: "✅ Sync done ({0}, {1} types)" },
+        "toast_reset_done":      { zh: "✅ 面板大小与位置已重置为默认", en: "✅ Panel size & position reset" },
+        "toast_market_ok":       { zh: "已直达市场：{0}", en: "Navigated to market: {0}" },
+        "toast_market_off":      { zh: "已打开市场（定位关闭）", en: "Market opened (locate off)" },
+        "toast_market_fail":     { zh: "未能直达市场", en: "Failed to navigate to market" },
+        "toast_item_removed":    { zh: "已移除物品", en: "Item removed" },
+        "toast_no_missing":      { zh: "当前没有需要补充的材料", en: "No materials needed" },
+        "toast_no_id":           { zh: "缺料已识别，但未拿到可加入清单的物品ID", en: "Shortage found but no valid item IDs" },
+        "toast_added_skipped":   { zh: "已加入 {0} 种，跳过 {1} 种无ID物品", en: "Added {0}, skipped {1} (no ID)" },
+        "toast_added":           { zh: "已加入购物清单：{0} 种，数量 {1}", en: "Added to list: {0} types, qty {1}" },
+        "toast_threshold_set":   { zh: '已设置「{0}」常备 {1}', en: 'Reserve set for "{0}": {1}' },
+        "toast_threshold_invalid":{ zh: "请输入有效的常备数量", en: "Please enter a valid reserve amount" },
+        "toast_threshold_cleared":{ zh: '已清除「{0}」的常备设置', en: 'Reserve cleared for "{0}"' },
+
+        // ── 状态/日志 ──
+        "action_added_to_cart":  { zh: "已将缺料加入购物清单", en: "Added shortage to shopping list" },
+        "action_cleared_non":    { zh: "已清空非收藏物品", en: "Cleared non-starred items" },
+        "action_cleared_all":    { zh: "已清空购物清单（含收藏）", en: "Cleared shopping list (incl. starred)" },
+        "action_market_ok":      { zh: "已直达市场：{0}", en: "Market: {0}" },
+        "action_market_off":     { zh: "已直达市场：{0}（定位关闭）", en: "Market: {0} (locate off)" },
+        "action_market_fail":    { zh: "直达市场失败：{0}", en: "Market nav failed: {0}" },
+        "action_calculated":     { zh: "已计算缺料：{0} 种，{1}", en: "Calculated: {0} types, {1} short" },
+        "action_sufficient":     { zh: "已计算缺料：材料充足", en: "Calculated: materials sufficient" },
+        "action_startup":        { zh: "v{0} 已启动（{1}，{2}，{3}，数据源:{4}），等待打开制作/房屋/市场弹窗", en: "v{0} started ({1}, {2}, {3}, src:{4}), waiting for panel" },
+        "ws_exact":              { zh: "WS精确", en: "WS" },
+        "ws_waiting":            { zh: "等待WS", en: "WS pending" },
+        "dl_ok":                 { zh: "数据层✓", en: "DataLayer✓" },
+        "dl_fallback":           { zh: "DOM回退", en: "DOM fallback" },
+        "plans_n":               { zh: "{0}计划", en: "{0} plans" },
+        "no_plans":              { zh: "无计划", en: "No plans" },
+        "cache":                 { zh: "缓存", en: "cache" },
+
+        // ── WS 状态显示 ──
+        "ws_status_ok":          { zh: "✅ WS库存（{0}种）", en: "✅ WS Inv ({0})" },
+        "ws_status_wait":        { zh: "⏳ 等待WS", en: "⏳ WS pending" },
+        "dl_status_ok":          { zh: "✅ 数据层（{0}配方·{1}）", en: "✅ DataLayer ({0} recipes·{1})" },
+        "dl_status_wait":        { zh: "⏳ 等待数据层", en: "⏳ DataLayer pending" },
+        "none":                  { zh: "无", en: "none" },
+
+        // ── 拾取模式 ──
+        "pick_selected":         { zh: "已选 <strong>{0}</strong> 种物品", en: "<strong>{0}</strong> item(s) selected" },
+        "pick_cancel":           { zh: "取消选择", en: "Cancel" },
+        "pick_confirm_title":    { zh: "确认添加到购物清单", en: "Confirm Add to List" },
+        "pick_subtitle":         { zh: "已选 {0} 种物品，可修改数量", en: "{0} item(s) selected, edit qty below" },
+        "pick_confirm_btn":      { zh: "确认添加", en: "Confirm Add" },
+        "pick_back_btn":         { zh: "继续选择", en: "Continue Picking" },
+
+        // ── v1.4.3: Z-score 安全边际 ──
+        "s_zscore":              { zh: "安全边际", en: "Safety Margin" },
+        "s_zscore_desc":         { zh: "工匠茶概率模型 Z-score（越高越安全，推荐95%）", en: "Artisan tea Z-score (higher = safer, 95% recommended)" },
+        "s_zscore_none":         { zh: "关闭（线性）", en: "Off (linear)" },
+        "s_guzzling":            { zh: "暴饮袋等级", en: "Guzzling Pouch" },
+        "s_guzzling_desc":       { zh: "暴饮袋强化等级（影响工匠茶浓缩倍率）", en: "Guzzling pouch enhancement level (affects tea concentration)" },
+        "s_guzzling_auto":       { zh: "自动检测", en: "Auto-detect" },
+        "zscore_tag":            { zh: "Z={0}", en: "Z={0}" },
+        "zscore_hover":          { zh: "期望 {0} + 余量 {1} = {2}", en: "Expected {0} + margin {1} = {2}" },
+        "toast_zscore_changed":  { zh: "安全边际已设置为 {0}", en: "Safety margin set to {0}" },
+        "toast_guzzling_changed":{ zh: "暴饮袋等级已设置为 {0}", en: "Guzzling pouch level set to {0}" },
+
+        // ── v1.4.3: 配方链递归解算 ──
+        "add_chain":             { zh: "加入全链材料", en: "Add Full Chain" },
+        "chain_title":           { zh: "升级链 ({0}步)", en: "Upgrade Chain ({0} steps)" },
+        "chain_current":         { zh: "当前", en: "Current" },
+        "chain_step_from":       { zh: "升级自", en: "From" },
+        "chain_tail":            { zh: "链尾", en: "Base" },
+        "chain_upgrade_tag":     { zh: "升级", en: "Upgrade" },
+        "toast_chain_added":     { zh: "已加入完整配方链：{0} 种原始材料，数量 {1}", en: "Added full chain: {0} leaf materials, qty {1}" },
+
+        // ── v1.4.3: 任务面板 ──
+        "s_quest_tracking":      { zh: "任务追踪", en: "Task Tracking" },
+        "s_quest_tracking_desc": { zh: "在购物车中显示生产类任务面板", en: "Show production task panel in cart drawer" },
+        "quest_panel_title":     { zh: "生产任务", en: "Production Tasks" },
+        "quest_no_tasks":        { zh: "暂无生产任务", en: "No production tasks" },
+        "quest_add_missing":     { zh: "补缺料", en: "Add Missing" },
+        "quest_create_plan":     { zh: "建计划", en: "Plan" },
+        "quest_goto_craft":      { zh: "前往", en: "Go" },
+        "quest_remaining":       { zh: "还需 {0} 次", en: "{0} remaining" },
+        "toast_quest_added":     { zh: "已添加任务材料：{0} 种", en: "Added quest materials: {0} types" },
+        "toast_quest_plan":      { zh: "已为任务创建计划：{0}", en: "Created plan for quest: {0}" },
+    };
+
+    /**
+     * 翻译函数：根据当前语言获取翻译文本，支持 {0}, {1}... 占位符
+     * @param {string} key - 翻译键
+     * @param {...any} args - 占位符参数
+     * @returns {string}
+     */
+    function t(key, ...args) {
+        const entry = _I18N[key];
+        if (!entry) return key;
+        let text = entry[_currentLang] || entry["zh"] || key;
+        for (let i = 0; i < args.length; i++) {
+            text = text.replace(`{${i}}`, String(args[i] ?? ""));
+        }
+        return text;
+    }
+
+
+    /**
+     * 全局运行时状态
+     * - cart: 购物车数据（itemId → CartRow）
+     * - craftingPlans: 制作计划（actionHrid → Plan）
+     * - ui: DOM 元素缓存
+     */
+    const STATE = {
+        cart: new Map(),              // 购物车内容
+        craftingPlans: new Map(),     // 制作计划
+        plansCollapsed: false,        // 制作计划面板是否折叠
+        craftingPlansEnabled: true,   // 制作计划功能开关
+        currentModal: null,           // 当前检测到的弹窗 DOM
+        currentData: null,            // 当前提取的缺料数据
+        lastDataSignature: "",        // 上次数据签名（用于跳过相同数据的重绘）
+        refreshTimer: null,           // 刷新定时器 ID
+        lastAction: "",     // 状态栏文字
+        suppressObserverDepth: 0,     // Observer 抑制深度计数
+        enhCooldownUntil: 0,          // v1.3.7: 强化面板重建冷却期截止时间戳
+        lastNonEmptyModal: null,      // v1.3.7: 上一个有有效数据的 modal DOM 引用
+        observer: null,               // 全局 MutationObserver
+        marketTargetItemId: "",       // 当前市场定位目标物品 ID
+        marketMatchCount: 0,          // 市场定位匹配数
+        marketPanelVisible: false,    // 市场面板是否可见
+        locateEnabled: true,          // 市场定位开关
+        drawerLocked: true,           // 面板锁定（点击外部不关闭）
+        includeUpgrade: true,         // 是否包含升级物品缺料
+        inventorySyncEnabled: true,   // 库存同步开关
+        settingsPanelOpen: false,     // 设置面板是否展开
+        manualActionCount: 1,         // 手动行动次数
+        cartSearchQuery: "",          // 购物车搜索关键词
+        pickMode: false,              // 从背包拾取模式
+        pickedItems: new Map(),       // 拾取模式已选物品
+        cartNonEmptyOnOpen: false,    // 打开面板时购物车是否非空（用于自动收起判断）
+        autoCollapseEnabled: true,    // 自动收起开关
+        // v1.3.1: 新增开关
+        autoPrefillEnabled: true,     // 市场弹窗自动预填数量
+        purchaseNavEnabled: true,     // 采购导航条
+        // v1.4.3: Z-score 安全边际
+        zScoreIndex: 0,               // Z_OPTIONS 索引；0 = 关闭（线性）
+        guzzlingPouchLevel: -1,       // -1 = 自动检测；0-20 = 手动指定
+        // v1.4.3: 升级链树
+        chainTreeOpen: false,          // 升级链树是否展开
+        // v1.4.3: 任务面板
+        questPanelVisible: false,      // 任务面板是否展开
+        questPanelEnabled: true,       // 任务追踪功能开关
+        ui: {
+            drawer: null,             // 购物车面板 DOM
+            mask: null,               // 遮罩层 DOM
+            tab: null,                // FAB 悬浮按钮 DOM
+            body: null,               // 面板主体区域 DOM
+            cartList: null,           // 购物车列表容器 DOM
+            count: null               // 计数显示 DOM
+        }
+    };
+
+    let _fiberHostCache = null;         // React Fiber 宿主缓存（用于调用 goToMarketplace）
+    let _fiberHostCachedAt = 0;         // 缓存时间戳
+    const FIBER_CACHE_TTL = 15000;      // Fiber 缓存过期时间（ms）
+    const FIBER_MAX_DEPTH = 300;        // Fiber 树遍历最大深度
+
+    // ── v1.2.2→v1.3.7: WebSocket 精确库存追踪 ──────────────────────
+    //   通过拦截 WebSocket 消息获取精确的物品库存，比 DOM 扫描更准确。
+    //   v1.3.7: 改用 hash 主键存储 + 仅聚合 inventory 位置，
+    //   修复强化场景中同 (itemHrid, enhLevel) 多条目互相覆盖导致库存归零的问题。
+    const _wsInventory = {
+        _hashMap: new Map(),    // hash → { itemHrid, itemLocationHrid, enhancementLevel, count }
+        _detailMap: new Map(),  // hrid → Map<enhancementLevel, count>（仅 inventory 的聚合视图）
+        ready: false,           // 是否已收到初始数据
+        _callbacks: [],         // onChange 回调列表
+
+        /** 初始化：清空并加载角色物品列表（init_character_data 时调用） */
+        init(characterItems) {
+            this._hashMap.clear();
+            this._detailMap.clear();
+            if (!Array.isArray(characterItems)) return;
+            for (const item of characterItems) {
+                if (!item || !item.itemHrid) continue;
+                const key = item.hash || `${item.itemLocationHrid || ""}::${item.itemHrid}::${item.enhancementLevel || 0}`;
+                this._hashMap.set(key, {
+                    itemHrid: item.itemHrid,
+                    itemLocationHrid: item.itemLocationHrid || "",
+                    enhancementLevel: item.enhancementLevel || 0,
+                    count: item.count || 0,
+                });
+            }
+            this._rebuildDetailMap();
+        },
+
+        /** 增量更新：合并 endCharacterItems delta 到库存映射 */
+        _patch(items) {
+            if (!Array.isArray(items)) return;
+            for (const item of items) {
+                if (!item || !item.itemHrid) continue;
+                const key = item.hash || `${item.itemLocationHrid || ""}::${item.itemHrid}::${item.enhancementLevel || 0}`;
+                this._hashMap.set(key, {
+                    itemHrid: item.itemHrid,
+                    itemLocationHrid: item.itemLocationHrid || "",
+                    enhancementLevel: item.enhancementLevel || 0,
+                    count: item.count || 0,
+                });
+            }
+            this._rebuildDetailMap();
+        },
+
+        /**
+         * 从 hashMap 重建 detailMap（仅统计 inventory 位置的物品）
+         * ★ v1.3.7 关键修复:
+         *   1. 只统计背包中的物品，忽略装备栏/其他位置 → 防止装备覆盖背包库存
+         *   2. 同 (hrid, level) 的多个 hash 条目累加 → 防止强化重置时新旧栈互相覆盖
+         */
+        _rebuildDetailMap() {
+            this._detailMap.clear();
+            for (const item of this._hashMap.values()) {
+                if (item.itemLocationHrid && item.itemLocationHrid !== "/item_locations/inventory") continue;
+                if (!this._detailMap.has(item.itemHrid)) {
+                    this._detailMap.set(item.itemHrid, new Map());
+                }
+                const levels = this._detailMap.get(item.itemHrid);
+                const level = item.enhancementLevel || 0;
+                levels.set(level, (levels.get(level) || 0) + (item.count || 0));
+            }
+            this.ready = true;
+            this._fireCallbacks();
+        },
+
+        /** 获取指定物品的基础等级（enhancementLevel=0）库存数 */
+        getCount(rawItemId) {
+            const bare = String(rawItemId || "").replace(/^\/items\//, "");
+            const hrid = `/items/${bare}`;
+            const levels = this._detailMap.get(hrid);
+            if (!levels) return 0;
+            return levels.get(0) || 0;
+        },
+
+        /**
+         * v1.3.7: 获取指定物品在所有位置中装备的最高强化等级
+         * 用于查找非 inventory 的装备（如 guzzling_pouch 在 /item_locations/pouch）
+         * 返回 -1 表示未找到
+         */
+        getEquippedLevel(itemHrid) {
+            const hrid = itemHrid.startsWith("/items/") ? itemHrid : `/items/${itemHrid}`;
+            let maxLevel = -1;
+            for (const item of this._hashMap.values()) {
+                if (item.itemHrid !== hrid) continue;
+                if (item.count > 0 && item.enhancementLevel > maxLevel) {
+                    maxLevel = item.enhancementLevel;
+                }
+            }
+            return maxLevel;
+        },
+
+        /** 导出库存快照（bareId → count），用于与 DOM 扫描方式统一接口 */
+        getSnapshot() {
+            const result = new Map();
+            for (const [hrid, levels] of this._detailMap) {
+                const bareId = hrid.replace(/^\/items\//, "");
+                const count = levels.get(0) || 0;
+                if (count > 0) result.set(bareId, count);
+            }
+            return result;
+        },
+
+        /** 注册库存变更回调 */
+        onChange(cb) {
+            if (typeof cb === "function") this._callbacks.push(cb);
+        },
+
+        /** 触发所有注册的回调 */
+        _fireCallbacks() {
+            for (const cb of this._callbacks) {
+                try { cb(); } catch (e) { /* ignore */ }
+            }
+        }
+    };
+
+    // ── v1.3.1: WS 截获的游戏数据（解除 Mooket 依赖）───────────
+    let _capturedClientData = null;
+
+    /** v1.3.1: 最小化 LZString.decompressFromUTF16（MIT License, Copyright (c) pieroxy） */
+    function _lzDecompressUTF16(input) {
+        if (input == null || input === "") return "";
+        const f = function (index) { return input.charCodeAt(index) - 32; };
+        const length = input.length;
+        const resetValue = 16384;
+        let dictionary = [], enlargeIn = 4, dictSize = 4, numBits = 3, entry = "", result = [], w, c, bits, resb, maxpower, power;
+        let data = { val: f(0), position: resetValue, index: 1 };
+        for (let i = 0; i < 3; i++) dictionary[i] = i;
+        bits = 0; maxpower = Math.pow(2, 2); power = 1;
+        while (power !== maxpower) {
+            resb = data.val & data.position;
+            data.position >>= 1;
+            if (data.position === 0) { data.position = resetValue; data.val = f(data.index++); }
+            bits |= (resb > 0 ? 1 : 0) * power;
+            power <<= 1;
+        }
+        switch (bits) {
+            case 0: bits = 0; maxpower = Math.pow(2, 8); power = 1;
+                while (power !== maxpower) { resb = data.val & data.position; data.position >>= 1; if (data.position === 0) { data.position = resetValue; data.val = f(data.index++); } bits |= (resb > 0 ? 1 : 0) * power; power <<= 1; }
+                c = String.fromCharCode(bits); break;
+            case 1: bits = 0; maxpower = Math.pow(2, 16); power = 1;
+                while (power !== maxpower) { resb = data.val & data.position; data.position >>= 1; if (data.position === 0) { data.position = resetValue; data.val = f(data.index++); } bits |= (resb > 0 ? 1 : 0) * power; power <<= 1; }
+                c = String.fromCharCode(bits); break;
+            case 2: return "";
+        }
+        dictionary[3] = c; w = c; result.push(c);
+        while (true) {
+            if (data.index > length) return "";
+            bits = 0; maxpower = Math.pow(2, numBits); power = 1;
+            while (power !== maxpower) { resb = data.val & data.position; data.position >>= 1; if (data.position === 0) { data.position = resetValue; data.val = f(data.index++); } bits |= (resb > 0 ? 1 : 0) * power; power <<= 1; }
+            switch (c = bits) {
+                case 0: bits = 0; maxpower = Math.pow(2, 8); power = 1;
+                    while (power !== maxpower) { resb = data.val & data.position; data.position >>= 1; if (data.position === 0) { data.position = resetValue; data.val = f(data.index++); } bits |= (resb > 0 ? 1 : 0) * power; power <<= 1; }
+                    dictionary[dictSize++] = String.fromCharCode(bits); c = dictSize - 1; enlargeIn--; break;
+                case 1: bits = 0; maxpower = Math.pow(2, 16); power = 1;
+                    while (power !== maxpower) { resb = data.val & data.position; data.position >>= 1; if (data.position === 0) { data.position = resetValue; data.val = f(data.index++); } bits |= (resb > 0 ? 1 : 0) * power; power <<= 1; }
+                    dictionary[dictSize++] = String.fromCharCode(bits); c = dictSize - 1; enlargeIn--; break;
+                case 2: return result.join("");
+            }
+            if (enlargeIn === 0) { enlargeIn = Math.pow(2, numBits); numBits++; }
+            if (dictionary[c]) entry = dictionary[c];
+            else if (c === dictSize) entry = w + w.charAt(0);
+            else return null;
+            result.push(entry);
+            dictionary[dictSize++] = w + entry.charAt(0);
+            enlargeIn--;
+            if (enlargeIn === 0) { enlargeIn = Math.pow(2, numBits); numBits++; }
+            w = entry;
+        }
+    }
+
+    /** 从 localStorage 读取 LZ 压缩的游戏初始化数据（initClientData） */
+    function _readClientDataFromCache() {
+        try {
+            const raw = localStorage.getItem("initClientData");
+            if (!raw) return null;
+            let json = null;
+            // 优先使用全局 LZString（Mooket 等扩展可能注入），否则用本地实现
+            if (typeof LZString !== "undefined" && LZString.decompressFromUTF16) {
+                json = LZString.decompressFromUTF16(raw);
+            } else {
+                json = _lzDecompressUTF16(raw);
+            }
+            if (!json) return null;
+            const parsed = JSON.parse(json);
+            if (parsed && parsed.actionDetailMap) { parsed._src = "localStorage"; return parsed; }
+            return null;
+        } catch (e) {
+            console.warn("[mwi-mm] localStorage initClientData 读取失败:", e);
+            return null;
+        }
+    }
+
+    // ── v1.3.1: WS 市场数据缓存 ────────────────────────────────
+    /** 市场订单簿缓存（WS 推送更新） */
+    const _marketDataCache = {
+        _cache: new Map(),   // itemHrid → { asks, bids, updatedAt }
+        _callbacks: [],      // onChange 回调列表
+
+        /** 更新指定物品的市场订单簿数据 */
+        update(data) {
+            if (!data?.marketItemOrderBooks) return;
+            const { itemHrid, orderBooks } = data.marketItemOrderBooks;
+            if (!itemHrid || !orderBooks?.[0]) return;
+            const book = orderBooks[0];
+            this._cache.set(itemHrid, {
+                asks: Array.isArray(book.asks) ? book.asks : [],
+                bids: Array.isArray(book.bids) ? book.bids : [],
+                updatedAt: Date.now()
+            });
+            this._fireCallbacks(itemHrid);
+        },
+
+        /** 按 hrid 获取缓存的订单簿 */
+        get(itemHrid) { return this._cache.get(itemHrid) || null; },
+        /** 按 bareId（不带 /items/ 前缀）获取 */
+        getByBareId(bareId) { return this.get(`/items/${bareId}`); },
+
+        /** 获取最低卖价挂单 */
+        getBestAsk(itemHrid) {
+            const data = this.get(itemHrid);
+            if (!data?.asks?.length) return null;
+            return data.asks.reduce((best, a) => (!best || a.price < best.price) ? a : best, null);
+        },
+
+        /** 获取最高买价挂单 */
+        getBestBid(itemHrid) {
+            const data = this.get(itemHrid);
+            if (!data?.bids?.length) return null;
+            return data.bids.reduce((best, b) => (!best || b.price > best.price) ? b : best, null);
+        },
+
+        /** 注册订单簿变更回调 */
+        onChange(cb) { if (typeof cb === "function") this._callbacks.push(cb); },
+
+        _fireCallbacks(itemHrid) {
+            for (const cb of this._callbacks) {
+                try { cb(itemHrid); } catch (e) { /* ignore */ }
+            }
+        }
+    };
+
+    // ── v1.3.7: WS 饮品插槽缓存（解除 React Fiber 依赖）─────────
+    //   通过 WS 截获 actionTypeDrinkSlotsMap，替代脆弱的 React Fiber 访问。
+    //   用于精确检测工匠茶（artisan_tea）是否在制作类技能的饮品栏中。
+    const _wsDrinkSlots = {
+        _map: {},  // actionType → ConsumableSlot[]（如 {"/action_types/crafting": [{itemHrid: "/items/artisan_tea", ...}]}）
+
+        /** 从 init_character_data 初始化 */
+        init(drinkSlotsMap) {
+            if (drinkSlotsMap && typeof drinkSlotsMap === "object") {
+                this._map = drinkSlotsMap;
+            }
+        },
+
+        /** 从 action_type_consumable_slots_updated 更新 */
+        update(drinkSlotsMap) {
+            if (drinkSlotsMap && typeof drinkSlotsMap === "object") {
+                this._map = drinkSlotsMap;
+            }
+        },
+
+        /** 检查指定 actionType 是否装备了某种饮品 */
+        hasDrink(actionType, itemHrid) {
+            const slots = this._map[actionType];
+            if (!Array.isArray(slots)) return false;
+            return slots.some(s => s && s.itemHrid === itemHrid);
+        },
+
+        /** 获取指定 actionType 的饮品列表 */
+        getSlots(actionType) {
+            return this._map[actionType] || [];
+        }
+    };
+
+    // ── v1.4.3: Z-score 安全边际常量与计算模块 ──────────────────
+    const Z_OPTIONS = [
+        { label: "none",  z: 0 },
+        { label: "84.1%", z: 1.0 },
+        { label: "95%",   z: 1.645 },
+        { label: "99%",   z: 2.326 },
+        { label: "99.9%", z: 3.090 }
+    ];
+
+    const ENHANCEMENT_BONUSES = [
+        0.00, 0.02, 0.042, 0.066, 0.092, 0.12, 0.15, 0.182,
+        0.216, 0.255, 0.29, 0.33, 0.372, 0.416, 0.462, 0.51,
+        0.56, 0.612, 0.666, 0.722, 0.78
+    ];
+
+    const _zScoreCalc = {
+        /**
+         * 二项分布 + Z-score 安全边际计算材料需求量
+         * @param {number} base - 每次制作的单项材料消耗
+         * @param {number} n    - 制作次数
+         * @param {number} p    - 工匠茶节省概率
+         * @param {number} z    - Z-score 值
+         * @returns {{ expected: number, margin: number, total: number }}
+         */
+        calcMaterials(base, n, p, z) {
+            if (n <= 0) return { expected: 0, margin: 0, total: 0 };
+            if (p <= 0 || z <= 0) {
+                // 无 artisan 或 z=0 → 线性计算（向后兼容）
+                const val = Math.ceil(base * n * (1 - p) - 1e-9);
+                return { expected: val, margin: 0, total: val };
+            }
+            if (p >= 1) return { expected: 0, margin: 0, total: 0 };
+            const expected = base * n * (1 - p);
+            const stddev = Math.sqrt(base * n * p * (1 - p));
+            const margin = z * stddev;
+            const total = Math.min(base * n, Math.ceil(expected + margin));
+            return { expected: Math.ceil(expected - 1e-9), margin: Math.ceil(margin), total };
+        },
+
+        /** 生成 hover 提示文字：「期望 472 + 余量 15 = 487」 */
+        formatBreakdown(base, n, p, z) {
+            const { expected, margin, total } = this.calcMaterials(base, n, p, z);
+            return t("zscore_hover", expected, margin, total);
+        },
+
+        /** 获取当前激活的 Z 值 */
+        getActiveZ() {
+            return Z_OPTIONS[STATE.zScoreIndex]?.z || 0;
+        }
+    };
+
+    // ── v1.3.5: 制作计划追踪器 ──────────────────────────────────
+    const _craftingPlanTracker = {
+        /** WS 推送 action_completed → 更新计划进度 */
+        onActionCompleted(endCharacterAction) {
+            if (!endCharacterAction || !endCharacterAction.actionHrid) return;
+            const actionHrid = endCharacterAction.actionHrid;
+            const plan = STATE.craftingPlans.get(actionHrid);
+            if (!plan) return;
+
+            plan.craftedCount = endCharacterAction.currentCount || 0;
+            plan.status = "crafting";
+            plan.updatedAt = nowIso();
+
+            const isDone = endCharacterAction.hasMaxCount
+                && endCharacterAction.currentCount >= endCharacterAction.maxCount;
+            const planFulfilled = plan.craftedCount >= plan.craftCount;
+
+            if (isDone || planFulfilled) {
+                this._completePlan(actionHrid, plan);
+            } else {
+                savePlans();
+                renderPlansUI();
+            }
+        },
+
+        /** actions_updated isDone 信号 → 确认计划最终状态 */
+        onActionDone(actionHrid, finalCount) {
+            const plan = STATE.craftingPlans.get(actionHrid);
+            if (!plan) return;
+            plan.craftedCount = finalCount || plan.craftedCount;
+            if (plan.craftedCount >= plan.craftCount) {
+                this._completePlan(actionHrid, plan);
+            } else {
+                plan.status = "active";
+                plan.updatedAt = nowIso();
+                savePlans();
+                renderPlansUI();
+            }
+        },
+
+        /** 标记计划完成，3 秒后自动移除 */
+        _completePlan(actionHrid, plan) {
+            plan.status = "completed";
+            plan.completedAt = nowIso();
+            savePlans();
+            renderPlansUI();
+            showToast(t("toast_plan_done", plan.recipeName), "success");
+            setTimeout(() => {
+                STATE.craftingPlans.delete(actionHrid);
+                savePlans();
+                renderPlansUI();
+                STATE.lastDataSignature = "";
+                refreshNow();
+            }, 3000);
+        }
+    };
+
+    // ── v1.4.3: 任务追踪模块 ─────────────────────────────────────
+    const PRODUCTION_SKILL_TYPES = new Set(["cheesesmithing", "crafting", "tailoring", "brewing", "cooking"]);
+
+    const _questTracker = {
+        _quests: [],   // 原始任务列表
+        _ready: false,
+
+        /** 从 init_character_data 初始化 */
+        init(characterQuests) {
+            if (!Array.isArray(characterQuests)) return;
+            this._quests = characterQuests;
+            this._ready = true;
+            this.renderPanel();
+        },
+
+        /** WS 推送更新（增量合并：只更新推送中出现的任务） */
+        update(questPatches) {
+            if (!Array.isArray(questPatches)) return;
+            for (const patch of questPatches) {
+                const idx = this._quests.findIndex(q => q.hrid === patch.hrid);
+                if (idx >= 0) this._quests[idx] = patch;
+                else this._quests.push(patch);
+            }
+            this.renderPanel();
+        },
+
+        /** 获取生产类任务 */
+        getProductionTasks() {
+            if (!this._ready || !_dataLayer.ready) return [];
+            return this._quests.filter(q => {
+                if (!q || !q.actionHrid) return false;
+                if (q.status && q.status !== "/quest_status/in_progress") return false;
+                if ((q.currentCount || 0) >= (q.goalCount || 0)) return false;
+                const action = _dataLayer._actionMap?.[q.actionHrid];
+                if (!action || action.function !== "/action_functions/production") return false;
+                const bareType = (action.type || "").replace(/^\/action_types\//, "");
+                return PRODUCTION_SKILL_TYPES.has(bareType);
+            }).map(q => {
+                const action = _dataLayer._actionMap[q.actionHrid];
+                const outputItem = action.outputItems?.[0];
+                const itemHrid = outputItem?.itemHrid || "";
+                const itemName = _dataLayer.hridToName(itemHrid) || itemHrid.replace(/^\/items\//, "");
+                const remaining = Math.max(0, (q.goalCount || 0) - (q.currentCount || 0));
+                return {
+                    questHrid: q.hrid || "",
+                    actionHrid: q.actionHrid,
+                    actionName: _dataLayer.hridToName(q.actionHrid) || q.actionHrid,
+                    itemHrid,
+                    itemName,
+                    done: q.currentCount || 0,
+                    total: q.goalCount || 0,
+                    remaining,
+                    skillType: (action.type || "").replace(/^\/action_types\//, ""),
+                    _action: action
+                };
+            });
+        },
+
+        /** 渲染任务面板到购物车抽屉 */
+        renderPanel() {
+            if (!STATE.ui.drawer || !STATE.questPanelEnabled) return;
+            const container = STATE.ui.drawer.querySelector(".mwi-mm-quest-panel");
+            if (!container) return;
+            if (!STATE.questPanelVisible) { container.style.display = "none"; return; }
+            container.style.display = "block";
+            const tasks = this.getProductionTasks();
+            if (!tasks.length) {
+                container.innerHTML = `<div class="mwi-mm-quest-empty">${t("quest_no_tasks")}</div>`;
+                return;
+            }
+            let html = `<div class="mwi-mm-quest-title">${t("quest_panel_title")}</div>`;
+            for (const task of tasks) {
+                const pct = task.total > 0 ? Math.min(100, Math.round(task.done / task.total * 100)) : 0;
+                html += `<div class="mwi-mm-quest-row">` +
+                    `<div class="mwi-mm-quest-info">` +
+                    `<span class="mwi-mm-quest-name">${escapeHtml(task.itemName)}</span>` +
+                    `<span class="mwi-mm-quest-progress">${task.done}/${task.total}</span>` +
+                    `</div>` +
+                    `<div class="mwi-mm-quest-bar"><div class="mwi-mm-quest-bar-fill" style="width:${pct}%"></div></div>` +
+                    `<div class="mwi-mm-quest-ops">` +
+                    `<button data-act="quest-add-missing" data-action-hrid="${escapeHtml(task.actionHrid)}" data-remaining="${task.remaining}" title="${t("quest_add_missing")}">${t("quest_add_missing")}</button>` +
+                    `<button data-act="quest-create-plan" data-action-hrid="${escapeHtml(task.actionHrid)}" data-remaining="${task.remaining}" title="${t("quest_create_plan")}">${t("quest_create_plan")}</button>` +
+                    `</div>` +
+                    `</div>`;
+            }
+            container.innerHTML = html;
+        }
+    };
+
+    // ── v1.3.0: 数据层 — actionDetailMap / itemNameToHridDict ─────
+    const _dataLayer = {
+        ready: false,
+        _clientData: null,
+        _nameToHrid: null,
+        _hridToName: null,
+        _outputToAction: null,
+        _actionMap: null,
+        _houseRoomMap: null,
+        _actionNameIndex: null,
+
+        /** 获取游戏客户端数据（优先 WS → localStorage → window.mwi） */
+        _getClientData() {
+            if (_capturedClientData?.actionDetailMap) return _capturedClientData;
+            const cached = _readClientDataFromCache();
+            if (cached) { _capturedClientData = cached; return cached; }
+            if (window.mwi?.initClientData?.actionDetailMap) return window.mwi.initClientData;
+            return null;
+        },
+
+        /** 获取国际化物品名称映射（displayName → hrid），支持中英文 */
+        _getI18nItemNames() {
+            try {
+                if (window.mwi?.itemNameToHridDict && typeof window.mwi.itemNameToHridDict === "object" && Object.keys(window.mwi.itemNameToHridDict).length > 100) {
+                    return window.mwi.itemNameToHridDict;
+                }
+                const gameObj = this._getGameObject();
+                const resources = gameObj?.props?.i18n?.options?.resources;
+                if (!resources) return null;
+                const result = {};
+                for (const langKey of ["en", "zh"]) {
+                    const names = resources[langKey]?.translation?.itemNames;
+                    if (names && typeof names === "object") {
+                        for (const [hrid, displayName] of Object.entries(names)) {
+                            result[displayName] = hrid;
+                        }
+                    }
+                }
+                return Object.keys(result).length > 0 ? result : null;
+            } catch { return null; }
+        },
+
+        /** v1.4.0: 获取双语 hrid→name 映射（从游戏 i18n 资源中提取） */
+        _getI18nBilingual() {
+            const result = { en: new Map(), zh: new Map() };
+            try {
+                const gameObj = this._getGameObject();
+                const resources = gameObj?.props?.i18n?.options?.resources;
+                if (!resources) return result;
+                for (const langKey of ["en", "zh"]) {
+                    const names = resources[langKey]?.translation?.itemNames;
+                    if (names && typeof names === "object") {
+                        for (const [hrid, displayName] of Object.entries(names)) {
+                            const fullHrid = hrid.startsWith("/items/") ? hrid : `/items/${hrid}`;
+                            result[langKey].set(fullHrid, displayName);
+                        }
+                    }
+                }
+            } catch { /* ignore */ }
+            return result;
+        },
+
+        init() {
+            const cd = this._getClientData();
+            if (!cd || typeof cd !== "object") return false;
+            this._clientData = cd;
+
+            try {
+                this._nameToHrid = new Map();
+                this._hridToName = new Map();
+                // v1.4.0: 双语名称映射
+                this._hridToNameEn = new Map();
+                this._hridToNameZh = new Map();
+
+                const i18nNames = this._getI18nItemNames();
+                if (i18nNames) {
+                    for (const [name, hrid] of Object.entries(i18nNames)) {
+                        this._nameToHrid.set(name, hrid);
+                        this._nameToHrid.set(name.toLowerCase(), hrid);
+                        this._hridToName.set(hrid, name);
+                    }
+                }
+
+                // v1.4.0: 构建双语名称索引
+                const bilingual = this._getI18nBilingual();
+                if (bilingual.en.size) this._hridToNameEn = bilingual.en;
+                if (bilingual.zh.size) this._hridToNameZh = bilingual.zh;
+
+                if (cd.itemDetailMap) {
+                    for (const [hrid, detail] of Object.entries(cd.itemDetailMap)) {
+                        if (detail && detail.name) {
+                            if (!this._hridToName.has(hrid)) {
+                                this._hridToName.set(hrid, detail.name);
+                            }
+                            if (!this._nameToHrid.has(detail.name)) {
+                                this._nameToHrid.set(detail.name, hrid);
+                                this._nameToHrid.set(detail.name.toLowerCase(), hrid);
+                            }
+                            // v1.4.0: 如果双语映射中缺少该物品，用 itemDetailMap 补全
+                            // itemDetailMap 中的 name 取决于当前游戏语言
+                            if (!this._hridToNameEn.has(hrid) && !this._hridToNameZh.has(hrid)) {
+                                this._hridToName.set(hrid, detail.name);
+                            }
+                        }
+                    }
+                }
+
+                this._actionNameIndex = new Map();
+                if (cd.actionDetailMap) {
+                    this._actionMap = cd.actionDetailMap;
+                    this._outputToAction = new Map();
+                    for (const action of Object.values(cd.actionDetailMap)) {
+                        if (action.outputItems && Array.isArray(action.outputItems)) {
+                            for (const output of action.outputItems) {
+                                if (output.itemHrid && !this._outputToAction.has(output.itemHrid)) {
+                                    this._outputToAction.set(output.itemHrid, action);
+                                }
+                            }
+                        }
+                        if (action.name) {
+                            this._actionNameIndex.set(action.name, action);
+                            this._actionNameIndex.set(action.name.toLowerCase(), action);
+                        }
+                    }
+                }
+
+                if (cd.houseRoomDetailMap) {
+                    this._houseRoomMap = cd.houseRoomDetailMap;
+                }
+
+                // v1.4.3: 构建升级链映射 outputHrid → upgradeHrid（前代物品）
+                this._upgradeChainMap = new Map();
+                if (cd.actionDetailMap) {
+                    for (const action of Object.values(cd.actionDetailMap)) {
+                        if (!action.upgradeItemHrid || action.function !== "/action_functions/production") continue;
+                        const outputs = action.outputItems || [];
+                        if (!outputs.length) continue;
+                        const outputHrid = outputs[0].itemHrid;
+                        if (outputHrid) {
+                            this._upgradeChainMap.set(outputHrid, action.upgradeItemHrid);
+                        }
+                    }
+                }
+
+                this.ready = true;
+                const nameCount = this._hridToName?.size || 0;
+                const recipeCount = this._outputToAction?.size || 0;
+                const chainCount = this._upgradeChainMap?.size || 0;
+                console.log(`[mwi-mm] v1.4.3 DataLayer initialized: ${nameCount} names, ${recipeCount} recipes, ${chainCount} upgrade chains`);
+                return true;
+            } catch (e) {
+                console.warn("[mwi-mm] 数据层初始化失败:", e);
+                this.ready = false;
+                return false;
+            }
+        },
+
+        /** 将 hrid 转换为显示名称（v1.4.0: 根据当前语言选择） */
+        hridToName(hrid) {
+            // 优先使用当前语言的双语映射
+            if (_currentLang === "en" && this._hridToNameEn?.size) {
+                const en = this._hridToNameEn.get(hrid);
+                if (en) return en;
+            }
+            if (_currentLang === "zh" && this._hridToNameZh?.size) {
+                const zh = this._hridToNameZh.get(hrid);
+                if (zh) return zh;
+            }
+            // 回退到通用映射
+            return this._hridToName?.get(hrid) || null;
+        },
+
+        /** 通过 React Fiber 获取游戏组件实例（用于读取内部状态） */
+        _getGameObject() {
+            try {
+                const el = document.querySelector('[class^="GamePage"]');
+                if (!el) return null;
+                const key = Reflect.ownKeys(el).find(k => typeof k === 'string' && k.startsWith('__reactFiber$'));
+                if (!key) return null;
+                return el[key]?.return?.stateNode || null;
+            } catch { return null; }
+        },
+
+        /**
+         * 计算饮品浓缩倍率（基于 guzzling_pouch 强化等级）
+         * ★ v1.3.7: 改用 getEquippedLevel 从 hashMap 查找装备的暴饮袋，
+         *   修复 _detailMap 仅含 inventory 物品后找不到装备栏暴饮袋的问题。
+         */
+        _getDrinkConcentration() {
+            // ★ v1.4.3: 手动指定暴饮袋等级时，直接用 ENHANCEMENT_BONUSES 计算
+            if (STATE.guzzlingPouchLevel >= 0) {
+                const bonus = ENHANCEMENT_BONUSES[STATE.guzzlingPouchLevel] ?? 0;
+                return 1 + 0.1 * (1 + bonus);
+            }
+            const cd = this._clientData || this._getClientData();
+            if (!cd) return 1;
+            const pouchHrid = "/items/guzzling_pouch";
+            // ★ v1.3.7: 从 hashMap 查找所有位置的暴饮袋（含 /item_locations/pouch）
+            const maxLevel = _wsInventory.getEquippedLevel(pouchHrid);
+            if (maxLevel < 0) return 1;
+            const pouchDetail = cd.itemDetailMap?.[pouchHrid];
+            if (!pouchDetail?.equipmentDetail) return 1;
+            const baseConc = pouchDetail.equipmentDetail.noncombatStats?.drinkConcentration || 0;
+            const enhBonus = pouchDetail.equipmentDetail.noncombatEnhancementBonuses?.drinkConcentration || 0;
+            const multiplier = cd.enhancementLevelTotalBonusMultiplierTable?.[maxLevel] || 0;
+            return 1 + baseConc + enhBonus * multiplier;
+        },
+
+        /**
+         * 计算工匠茶（artisan_tea）带来的材料减少加成比例
+         * ★ v1.3.7: 优先使用 WS 截获的饮品插槽数据，React Fiber 作为回退，
+         *   解决 React Fiber 路径脆弱 / 属性名不匹配导致工匠加成丢失的问题。
+         */
+        _getArtisanBuff(actionType) {
+            if (!actionType) return 0;
+            const bareType = actionType.replace(/^\/action_types\//, "");
+            if (!["cheesesmithing", "crafting", "tailoring", "cooking", "brewing"].includes(bareType)) return 0;
+
+            // 策略1: WS 截获的饮品插槽（最可靠）
+            if (_wsDrinkSlots.hasDrink(actionType, "/items/artisan_tea")) {
+                return 0.1 * this._getDrinkConcentration();
+            }
+
+            // 策略2: React Fiber 回退（兼容多种属性命名）
+            try {
+                const gameObj = this._getGameObject();
+                if (gameObj?.state) {
+                    const drinkMap = gameObj.state.actionTypeDrinkSlotsDict
+                        || gameObj.state.actionTypeDrinkSlotsMap
+                        || gameObj.state.actionTypeDrinkSlots;
+                    if (drinkMap) {
+                        const drinkSlots = drinkMap[actionType];
+                        if (Array.isArray(drinkSlots)) {
+                            const hasArtisan = drinkSlots.some(d => d?.itemHrid === "/items/artisan_tea");
+                            if (hasArtisan) return 0.1 * this._getDrinkConcentration();
+                        }
+                    }
+                }
+            } catch { /* ignore */ }
+
+            return 0;
+        },
+
+        /** 根据物品名/配方名查找对应的 action 配方数据 */
+        resolveActionByTitle(title) {
+            if (!this.ready) return null;
+            const trimmed = (title || "").trim();
+            if (!trimmed) return null;
+
+            // 先按物品名 → outputToAction 索引查找
+            const itemHrid = this._nameToHrid.get(trimmed) || this._nameToHrid.get(trimmed.toLowerCase());
+            if (itemHrid && itemHrid.startsWith("/items/") && this._outputToAction) {
+                const action = this._outputToAction.get(itemHrid);
+                if (action && action.inputItems) return action;
+            }
+
+            // 再按 action 名称索引查找
+            const byName = this._actionNameIndex?.get(trimmed) || this._actionNameIndex?.get(trimmed.toLowerCase());
+            if (byName && byName.inputItems) return byName;
+
+            return null;
+        }
+    };
+
+    // ── v1.4.3: 配方链递归解算模块 ──────────────────────────────
+    const _recipeChain = {
+        /** 检查物品是否可制作（在 _outputToAction 中存在生产配方） */
+        isCraftable(itemHrid) {
+            if (!_dataLayer.ready || !_dataLayer._outputToAction) return false;
+            const action = _dataLayer._outputToAction.get(itemHrid);
+            return !!(action && action.function === "/action_functions/production" && action.inputItems?.length);
+        },
+
+        /** 检查物品是否属于升级链（有前代物品） */
+        isUpgradeChain(itemHrid) {
+            return !!(_dataLayer._upgradeChainMap?.has(itemHrid));
+        },
+
+        /**
+         * 获取完整升级链步骤（迭代遍历，非递归分解）
+         * 沿 upgradeChainMap 向下走，每步收集非升级材料（套 artisan+z），升级前代 1:1 不套 artisan
+         * @returns {Array<{stepHrid, craftRuns, upgradeFromHrid, materials: [{hrid, qty, name}]}>}
+         */
+        getChainSteps(targetHrid, qty) {
+            if (!_dataLayer.ready) return [];
+            const steps = [];
+            let currentHrid = targetHrid;
+            let neededQty = qty;
+            const visited = new Set();
+
+            while (neededQty > 0 && steps.length < 25) {
+                if (visited.has(currentHrid)) break; // 防循环
+                visited.add(currentHrid);
+
+                const action = _dataLayer._outputToAction?.get(currentHrid);
+                if (!action || action.function !== "/action_functions/production" || !action.inputItems?.length) break;
+
+                const outputCount = action.outputItems?.[0]?.count || 1;
+                const craftRuns = Math.ceil(neededQty / outputCount);
+                const artisanBuff = _dataLayer._getArtisanBuff(action.type);
+                const zVal = _zScoreCalc.getActiveZ();
+                const upgradeHrid = _dataLayer._upgradeChainMap?.get(currentHrid) || null;
+
+                // 收集非升级材料（套 artisan + z-score）
+                const materials = [];
+                for (const inp of action.inputItems || []) {
+                    const isUpgrade = upgradeHrid && inp.itemHrid === upgradeHrid && (inp.count || 1) === 1;
+                    if (isUpgrade) continue; // 1:1 升级前代，不购买，沿链继续
+                    const needed = _zScoreCalc.calcMaterials(inp.count || 1, craftRuns, artisanBuff, zVal).total;
+                    materials.push({
+                        hrid: inp.itemHrid,
+                        qty: needed,
+                        name: _dataLayer.hridToName(inp.itemHrid) || inp.itemHrid.replace(/^\/items\//, "")
+                    });
+                }
+
+                steps.push({
+                    stepHrid: currentHrid,
+                    stepName: _dataLayer.hridToName(currentHrid) || currentHrid.replace(/^\/items\//, ""),
+                    craftRuns,
+                    upgradeFromHrid: upgradeHrid,
+                    materials
+                });
+
+                if (!upgradeHrid) break; // 链尾，无前代
+                currentHrid = upgradeHrid;
+                neededQty = craftRuns; // 1:1 升级，无 artisan
+            }
+            return steps;
+        },
+
+        /**
+         * 汇总全链叶子材料（所有步骤的非升级材料合并）
+         * @returns {Map<hrid, number>} hrid → 总需求量
+         */
+        getLeafMaterials(targetHrid, qty) {
+            const steps = this.getChainSteps(targetHrid, qty);
+            const merged = new Map();
+            for (const step of steps) {
+                for (const mat of step.materials) {
+                    merged.set(mat.hrid, (merged.get(mat.hrid) || 0) + mat.qty);
+                }
+            }
+            return merged;
+        },
+
+        /**
+         * 构建子树结构（用于 UI 展开显示升级链步骤）
+         * @returns {Array<{itemHrid, name, qty, depth, isCraftable, isUpgrade, isStep, materials}>}
+         */
+        buildSubTree(targetHrid, qty) {
+            const steps = this.getChainSteps(targetHrid, qty);
+            const rows = [];
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                // 每步的非升级材料
+                for (const mat of step.materials) {
+                    rows.push({
+                        itemHrid: mat.hrid, name: mat.name, qty: mat.qty,
+                        depth: i + 1, isCraftable: false, isUpgrade: false
+                    });
+                }
+                // 如果有升级前代，显示为步骤行
+                if (step.upgradeFromHrid && i < steps.length - 1) {
+                    const nextStep = steps[i + 1];
+                    rows.push({
+                        itemHrid: step.upgradeFromHrid,
+                        name: nextStep.stepName,
+                        qty: step.craftRuns,
+                        depth: i + 1, isCraftable: true, isUpgrade: true, isStep: true
+                    });
+                }
+            }
+            return rows;
+        },
+
+        /** 叶子材料转购物车条目（扣除库存） */
+        toCartItems(leafMap, recipeHrid) {
+            const items = [];
+            for (const [hrid, qty] of leafMap) {
+                const bareId = hrid.replace(/^\/items\//, "");
+                if (isCoinItem(bareId)) continue;
+                const name = _dataLayer.hridToName(hrid) || bareId;
+                const stock = getEffectiveInventory(bareId, recipeHrid);
+                const missing = Math.max(0, qty - stock);
+                if (missing > 0) {
+                    items.push({ itemId: bareId, name, iconRef: hrid, missing, totalNeeded: qty });
+                }
+            }
+            return items;
+        }
+    };
+
+    /** 等待游戏客户端数据就绪（轮询，最多等 maxWait ms） */
+    function waitForClientData(maxWait = 8000) {
+        return new Promise(resolve => {
+            if (_capturedClientData?.actionDetailMap) { resolve(true); return; }
+            const cached = _readClientDataFromCache();
+            if (cached) { _capturedClientData = cached; resolve(true); return; }
+            if (window.mwi?.initClientData?.actionDetailMap) { resolve(true); return; }
+            const start = Date.now();
+            const timer = setInterval(() => {
+                if (_capturedClientData?.actionDetailMap || window.mwi?.initClientData?.actionDetailMap) {
+                    clearInterval(timer);
+                    resolve(true);
+                } else if (Date.now() - start > maxWait) {
+                    clearInterval(timer);
+                    resolve(false);
+                }
+            }, 200);
+        });
+    }
+
+    /**
+     * 拦截 WebSocket 消息
+     * 通过重写 MessageEvent.prototype.data getter，
+     * 在游戏接收到 WS 消息时同步解析库存/市场/制作计划数据。
+     */
+    function setupWSInterceptor() {
+        const prevGetter = Object.getOwnPropertyDescriptor(MessageEvent.prototype, "data")?.get;
+        if (!prevGetter) {
+            console.warn("[mwi-mm] 无法获取 MessageEvent.data getter，WS 库存追踪不可用");
+            return;
+        }
+
+        Object.defineProperty(MessageEvent.prototype, "data", {
+            configurable: true,
+            enumerable: true,
+            get: function () {
+                const socket = this.currentTarget;
+                const isGameWS = (socket instanceof WebSocket) && (
+                    socket.url.indexOf("api.milkywayidle.com/ws") !== -1
+                    || socket.url.indexOf("api-test.milkywayidle.com/ws") !== -1
+                    || socket.url.indexOf("api.milkywayidlecn.com/ws") !== -1
+                    || socket.url.indexOf("api-test.milkywayidlecn.com/ws") !== -1
+                );
+
+                const message = prevGetter.call(this);
+
+                if (isGameWS && !this.__mwiMMProcessed) {
+                    this.__mwiMMProcessed = true;
+                    try {
+                        const obj = JSON.parse(message);
+                        if (obj && typeof obj === "object") {
+                            if (obj.type === "init_character_data" && Array.isArray(obj.characterItems)) {
+                                _wsInventory.init(obj.characterItems);
+                                // v1.3.7: 同时截获饮品插槽数据
+                                if (obj.actionTypeDrinkSlotsMap) {
+                                    _wsDrinkSlots.init(obj.actionTypeDrinkSlotsMap);
+                                }
+                                // v1.4.3: 截获任务数据
+                                if (Array.isArray(obj.characterQuests)) {
+                                    _questTracker.init(obj.characterQuests);
+                                }
+                            } else if (Array.isArray(obj.endCharacterItems)) {
+                                _wsInventory._patch(obj.endCharacterItems);
+                            }
+                            // v1.3.7: 饮品插槽更新（周期性推送，含所有 actionType 的饮品状态）
+                            if (obj.type === "action_type_consumable_slots_updated" && obj.actionTypeDrinkSlotsMap) {
+                                _wsDrinkSlots.update(obj.actionTypeDrinkSlotsMap);
+                            }
+                            if (obj.type === "init_client_data") {
+                                obj._src = "WS";
+                                _capturedClientData = obj;
+                                console.log("[mwi-mm] 已截获 init_client_data（WS）");
+                                if (!_dataLayer.ready) {
+                                    _dataLayer.init();
+                                    updateWSStatusDisplay();
+                                }
+                            }
+                            if (obj.type === "market_item_order_books_updated") {
+                                _marketDataCache.update(obj);
+                            }
+                            // v1.3.5: 制作完成事件 — 精确匹配制作计划
+                            if (obj.type === "action_completed" && obj.endCharacterAction) {
+                                _craftingPlanTracker.onActionCompleted(obj.endCharacterAction);
+                            }
+                            // v1.3.5: 行动状态更新 — isDone 确认信号
+                            if (obj.type === "actions_updated" && Array.isArray(obj.endCharacterActions)) {
+                                for (const ca of obj.endCharacterActions) {
+                                    if (ca.isDone && ca.actionHrid) {
+                                        _craftingPlanTracker.onActionDone(ca.actionHrid, ca.currentCount);
+                                    }
+                                }
+                            }
+                            // v1.4.3: 任务进度更新（action_completed / quests_updated 推送 endCharacterQuests）
+                            if (Array.isArray(obj.endCharacterQuests)) {
+                                _questTracker.update(obj.endCharacterQuests);
+                            }
+                        }
+                    } catch (e) {
+                        // 非 JSON 消息或解析失败，忽略
+                    }
+                }
+
+                return message;
+            }
+        });
+
+        console.log("[mwi-mm] v1.4.3 WebSocket interceptor registered (lang=" + _currentLang + ")");
+    }
+
+    // ── 工具函数 ──────────────────────────────────────────────────
+
+    /** 返回当前时间的 ISO 格式字符串 */
+    function nowIso() { return new Date().toISOString(); }
+
+    /** 安全提取文字并截断（去多余空白，限制最大长度） */
+    function safeText(value, maxLen = 160) {
+        const text = String(value ?? "").replace(/\s+/g, " ").trim();
+        if (text.length <= maxLen) return text;
+        return text.slice(0, maxLen) + "...";
+    }
+
+    /** 获取元素 className 的小写形式（兼容 SVGAnimatedString） */
+    function classNameLower(el) {
+        const raw = el && typeof el.className === "string"
+            ? el.className
+            : (el && el.className && typeof el.className.baseVal === "string" ? el.className.baseVal : "");
+        return String(raw || "").toLowerCase();
+    }
+
+    /** 判断元素是否可见（display/visibility/opacity + 尺寸） */
+    function isVisible(el) {
+        if (!el || !(el instanceof Element)) return false;
+        const style = window.getComputedStyle(el);
+        if (!style || style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
+    /** 更新状态栏文字并触发重绘 */
+    function setAction(text) {
+        if (text === STATE.lastAction) return;
+        STATE.lastAction = text;
+        renderStatus();
+    }
+
+    /** 临时抑制 MutationObserver（避免自身 DOM 操作触发循环刷新） */
+    function suppressObserver() { STATE.suppressObserverDepth++; }
+    /** 恢复 Observer（通过微任务延迟，确保当前 DOM 操作完成） */
+    function resumeObserver() {
+        queueMicrotask(() => { if (STATE.suppressObserverDepth > 0) STATE.suppressObserverDepth--; });
+    }
+    /** Observer 是否被抑制 */
+    function isObserverSuppressed() { return STATE.suppressObserverDepth > 0; }
+    /** 在抑制 Observer 期间执行函数 */
+    function withObserverSuppressed(fn) {
+        suppressObserver();
+        try { return fn(); } finally { resumeObserver(); }
+    }
+
+    /** 提取元素文字，排除本插件注入的 DOM（徽章、摘要面板等） */
+    function textWithoutInjected(el) {
+        if (!el || !(el instanceof Element)) return "";
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll('.mwi-mm-upgrade-badge, .mwi-mm-upgrade-inline, .mwi-mm-summary-panel').forEach((node) => node.remove());
+        return safeText(clone.textContent || "", 180);
+    }
+
+    /** 解析紧凑数字格式（支持 k/m/b 后缀、逗号分隔、∞） */
+    function parseCompactNumber(token) {
+        if (token == null) return null;
+        const raw = String(token).trim().toLowerCase();
+        if (!raw) return null;
+        if (raw.includes("∞") || raw.includes("infinity")) return Infinity;
+        const match = raw.match(/-?\d+(?:[.,]\d+)?(?:[kmb])?/i);
+        if (!match) return null;
+        let normalized = match[0].replace(/,/g, "");
+        let unit = 1;
+        if (normalized.endsWith("k")) { unit = 1e3; normalized = normalized.slice(0, -1); }
+        else if (normalized.endsWith("m")) { unit = 1e6; normalized = normalized.slice(0, -1); }
+        else if (normalized.endsWith("b")) { unit = 1e9; normalized = normalized.slice(0, -1); }
+        const num = Number.parseFloat(normalized);
+        if (!Number.isFinite(num)) return null;
+        return num * unit;
+    }
+
+    /** 从文本中提取所有数字（返回数组） */
+    function parseNumbers(text) {
+        const raw = String(text ?? "").replace(/,/g, "");
+        const parts = raw.match(/-?\d+(?:\.\d+)?(?:[kmb])?|∞/gi) || [];
+        const nums = [];
+        for (const p of parts) {
+            const n = parseCompactNumber(p);
+            if (n != null) nums.push(n);
+        }
+        return nums;
+    }
+
+    /** 解析库存显示文本中的数值（取第一个有限数） */
+    function parseInventoryValue(text) {
+        const nums = parseNumbers(text);
+        for (const n of nums) { if (Number.isFinite(n)) return n; }
+        return 0;
+    }
+
+    /** 解析「每次所需」数量（取末尾有限数） */
+    function parseRequiredPerAction(text) {
+        const nums = parseNumbers(text);
+        if (!nums.length) return 0;
+        for (let i = nums.length - 1; i >= 0; i -= 1) {
+            if (Number.isFinite(nums[i])) return nums[i];
+        }
+        return 0;
+    }
+
+    /** 解析行动次数输入值（返回 { value, raw, infinite }） */
+    function parseActionCountValue(text) {
+        const raw = String(text ?? "").trim();
+        if (!raw) return { value: 1, raw: "", infinite: false };
+        const num = parseCompactNumber(raw);
+        if (num === Infinity) return { value: 1, raw, infinite: true };
+        if (!Number.isFinite(num) || num <= 0) return { value: 1, raw, infinite: false };
+        return { value: num, raw, infinite: false };
+    }
+
+    /** 从弹窗中读取行动次数（优先读 input，回退到文字解析） */
+    function readActionCount(modal) {
+        const firstContainer = modal.querySelector('[class*="SkillActionDetail_maxActionCountInput"]');
+        if (!firstContainer) return parseActionCountValue("1");
+        const input = firstContainer.querySelector('input[class*="Input_input"]');
+        if (input && isVisible(input)) {
+            const parsed = parseActionCountValue(input.value || input.textContent || "");
+            if (parsed.infinite || parsed.value >= 1) return parsed;
+        }
+        const fallback = parseNumbers(textWithoutInjected(firstContainer)).filter((n) => Number.isFinite(n) && n > 0);
+        if (fallback.length) return { value: Math.max(...fallback), raw: String(Math.max(...fallback)), infinite: false };
+        return parseActionCountValue(input?.value || input?.textContent || "1");
+    }
+
+    /** 格式化数量显示（整数不带小数，小数保留 2 位去尾零） */
+    function formatQty(num) {
+        const n = Number(num || 0);
+        if (!Number.isFinite(n)) return "0";
+        if (Math.abs(n - Math.round(n)) < 1e-8) return String(Math.round(n));
+        return n.toFixed(2).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+    }
+
+    /** 从元素中提取 svg use href 属性 */
+    function extractUseHref(root) {
+        if (!root || !(root instanceof Element)) return "";
+        const use = root.querySelector("svg use");
+        if (!use) return "";
+        return use.getAttribute("href") || use.getAttribute("xlink:href") || "";
+    }
+
+    /** 从元素中提取图标引用（多策略降级：use href → image href → data 属性） */
+    function extractIconRef(root) {
+        if (!root || !(root instanceof Element)) return "";
+        const nodes = [
+            root.querySelector("svg use"), root.querySelector("use"),
+            root.querySelector("image[href], image[xlink\\:href]"),
+            root.querySelector("[href*=\"#\"], [xlink\\:href*=\"#\"]")
+        ];
+        for (const node of nodes) {
+            if (!node) continue;
+            const href = node.getAttribute("href") || node.getAttribute("xlink:href") || "";
+            if (href) return href;
+        }
+        const attrNode = root.matches?.('[data-item-id], [data-item-hrid], [data-hrid]')
+            ? root : root.querySelector('[data-item-id], [data-item-hrid], [data-hrid]');
+        if (attrNode) {
+            return attrNode.getAttribute("data-item-id") || attrNode.getAttribute("data-item-hrid") || attrNode.getAttribute("data-hrid") || "";
+        }
+        return "";
+    }
+
+    /** 在多个升级物品容器中找到最佳候选（评分系统：图标、计数、非空状态） */
+    function findBestUpgradeContainer(modal) {
+        const candidates = [...modal.querySelectorAll(SEL.upgradeContainer)].filter((el) => isVisible(el));
+        if (!candidates.length) return null;
+        let best = candidates[0], bestScore = -Infinity;
+        for (const el of candidates) {
+            let score = 0;
+            const txt = textWithoutInjected(el);
+            const itemCore = el.querySelector(SEL.itemCore);
+            const cls = classNameLower(itemCore || el);
+            const iconRef = extractIconRef(itemCore || el);
+            if (itemCore) score += 2;
+            if (iconRef) score += 2;
+            if (cls.includes("item_empty")) score -= 6;
+            if (/没有选择升级物品|未选择升级物品|choose/i.test(txt)) score -= 5;
+            if (el.querySelector('[class*="Item_count"], [class*="inventoryCount"]')) score += 1;
+            if (score > bestScore) { bestScore = score; best = el; }
+        }
+        return best;
+    }
+
+    /** 在容器内找到最佳的数量显示元素（Item_count 优先） */
+    function pickBestCountElement(container) {
+        if (!container || !(container instanceof Element)) return null;
+        const nodes = [...container.querySelectorAll('[class*="Item_count"], [class*="inventoryCount"], [class*="inputCount"]')].filter((el) => isVisible(el));
+        if (!nodes.length) return null;
+        let best = nodes[0], bestScore = -Infinity;
+        for (const el of nodes) {
+            let score = 0;
+            const cls = classNameLower(el);
+            const txt = textWithoutInjected(el);
+            const nums = parseNumbers(txt).filter((n) => Number.isFinite(n));
+            if (cls.includes("item_count")) score += 3;
+            if (cls.includes("inventorycount")) score += 2;
+            if (cls.includes("inputcount")) score -= 1;
+            if (nums.length) score += 1;
+            if (txt.length > 0 && txt.length < 26) score += 1;
+            if (score > bestScore) { bestScore = score; best = el; }
+        }
+        return best;
+    }
+
+    /** 读取升级物品的「每次所需」数量 */
+    function readUpgradeNeedPerAction(upgradeEl) {
+        if (!upgradeEl || !(upgradeEl instanceof Element)) return 1;
+        const candidates = [...upgradeEl.querySelectorAll('[class*="inputCount"], [class*="requiredCount"]')].filter((el) => isVisible(el));
+        for (const el of candidates) {
+            const n = parseRequiredPerAction(textWithoutInjected(el));
+            if (Number.isFinite(n) && n > 0) return n;
+        }
+        return 1;
+    }
+
+    /**
+     * 解析「库存/所需」格式的文本（如 "10/50"）
+     * 兼容半角和全角斜杠（/、／）和等号（=、＝）
+     * ★ v1.3.7: 移除 toolkitActive 参数。当左侧无数值时（如 "/ 16"），
+     *   不再将右侧视为总需求量，而是让调用者按单次消耗处理。
+     *   修复强化面板输入格式被误解析为总量导致缺料永远为 0 的问题。
+     */
+    function parseStockNeedPair(text) {
+        const raw = String(text ?? "");
+        const slashIdx = raw.search(/[\/／]/);
+        if (slashIdx < 0) return null;
+        const beforeSlash = raw.slice(0, slashIdx);
+        if (/[=＝]/.test(beforeSlash)) return null;
+        const leftNums = parseNumbers(beforeSlash);
+        const rightNums = parseNumbers(raw.slice(slashIdx + 1));
+        if (!rightNums.length) return null;
+        const right = rightNums[0];
+        if (!Number.isFinite(right)) return null;
+        if (leftNums.length) {
+            const left = leftNums[leftNums.length - 1];
+            if (!Number.isFinite(left)) return null;
+            if (left < 0) return null;
+            return { stock: left, total: right };
+        }
+        return null;
+    }
+
+    /** 综合解析所需量（优先尝试 stock/need 格式，回退到普通解析） */
+    function resolveNeed(inputText, actionCountValue) {
+        const pair = parseStockNeedPair(inputText);
+        if (pair) {
+            const totalNeeded = pair.total;
+            const needPerAction = actionCountValue > 0 ? totalNeeded / actionCountValue : totalNeeded;
+            return { needPerAction, totalNeeded, stockOverride: pair.stock, inferred: true };
+        }
+        let fallbackStock = null;
+        const slashIdx = String(inputText ?? "").search(/[\/／]/);
+        if (slashIdx >= 0) {
+            const leftNums = parseNumbers(String(inputText).slice(0, slashIdx));
+            if (leftNums.length) {
+                const candidate = leftNums[leftNums.length - 1];
+                if (Number.isFinite(candidate) && candidate >= 0) fallbackStock = candidate;
+            }
+        }
+        const needPerAction = parseRequiredPerAction(inputText);
+        const totalNeeded = needPerAction * actionCountValue;
+        return { needPerAction, totalNeeded, stockOverride: fallbackStock, inferred: false };
+    }
+
+    /** 从技能面板中提取升级物品的缺料信息（多候选评分选择） */
+    function extractUpgradeFromModal(modal, actionCount) {
+        const allContainers = [...modal.querySelectorAll(SEL.upgradeContainer)];
+        const visible = allContainers.filter((el) => isVisible(el));
+        const containers = (visible.length ? visible : allContainers).slice(0, 12);
+        const upgradeMeta = { containerFound: containers.length > 0, hasSelected: false, href: "", countText: "", parseSource: "", candidateCount: containers.length };
+        if (!containers.length) return { upgrade: null, upgradeMeta };
+
+        let best = null;
+        for (const el of containers) {
+            const itemWrap = el.querySelector('[class*="Item_itemContainer"]');
+            const itemCore = itemWrap?.querySelector(SEL.itemCore) || el.querySelector(SEL.itemCore) || itemWrap || el;
+            const href = extractIconRef(itemCore) || extractUseHref(itemCore);
+            const itemId = isLikelyItemRef(href) ? normalizeItemId(href) : "";
+            const name = getItemName(itemCore, itemId || t("upgrade_item"));
+            const countEl = pickBestCountElement(el);
+            const countText = textWithoutInjected(countEl) || "";
+            const containerText = textWithoutInjected(el);
+            const currentStockRaw = parseInventoryValue(countText || containerText || "0");
+            let needPerAction = readUpgradeNeedPerAction(el);
+            let totalNeeded = needPerAction * actionCount.value;
+            let currentStock = currentStockRaw;
+            const upgResolve = resolveNeed(countText || containerText || "0", actionCount.value);
+            if (upgResolve.inferred) {
+                needPerAction = upgResolve.needPerAction;
+                totalNeeded = upgResolve.totalNeeded;
+                if (upgResolve.stockOverride != null) currentStock = upgResolve.stockOverride;
+            } else if (upgResolve.stockOverride != null) {
+                currentStock = upgResolve.stockOverride;
+            }
+            const totalNeededCeil = Math.ceil(totalNeeded - 1e-9);
+            const missing = Math.max(0, totalNeededCeil - currentStock);
+            const coreCls = classNameLower(itemCore);
+            const hasWarning = /没有选择升级物品|未选择升级物品|choose/i.test(containerText);
+            const hrefLower = String(href || "").toLowerCase();
+            let score = 0;
+            if (itemId) score += 10;
+            if (isLikelyItemRef(href)) score += 2;
+            if (countEl) score += 2;
+            if (currentStock > 0) score += 1;
+            if (coreCls.includes("item_empty")) score -= 8;
+            if (hasWarning) score -= 4;
+            if (hrefLower.includes("skills_sprite")) score -= 6;
+            if (!itemId && !countEl) score -= 2;
+            const candidate = { score, itemId, name, href, countText, parseSource: countEl ? classNameLower(countEl) : "", currentStock, needPerAction, totalNeeded, missing, missingRounded: missing, container: el, countEl, hasWarning };
+            if (!best || candidate.score > best.score) best = candidate;
+        }
+        if (!best) return { upgrade: null, upgradeMeta };
+        upgradeMeta.href = best.href || "";
+        upgradeMeta.countText = best.countText || "";
+        upgradeMeta.parseSource = best.parseSource || "";
+        upgradeMeta.hasSelected = Boolean(best.itemId);
+        if (!best.itemId) return { upgrade: null, upgradeMeta };
+
+        const upgrade = {
+            type: "upgrade", itemId: best.itemId, name: best.name, iconRef: best.href || "",
+            currentStock: best.currentStock, needPerAction: best.needPerAction, totalNeeded: best.totalNeeded,
+            missing: best.missing, missingRounded: best.missingRounded,
+            canAddToCart: true, container: best.container || null, countEl: best.countEl
+        };
+        return { upgrade, upgradeMeta };
+    }
+
+    /** 从 svg href 提取规范化物品 ID（去除 #、item_ 前缀和 /items/ 路径） */
+    function normalizeItemId(rawHref) {
+        const href = String(rawHref || "").trim();
+        if (!href) return "";
+        if (href.includes("#")) { const after = href.split("#").pop(); return String(after || "").replace(/^item_/, ""); }
+        if (href.startsWith("/items/")) return href.slice("/items/".length);
+        return href.replace(/^#/, "").replace(/^item_/, "");
+    }
+
+    /** 规范化购物车物品 ID（统一去除 /items/ 和 # 前缀） */
+    function normalizeCartItemId(itemId) {
+        const raw = String(itemId || "").trim();
+        if (!raw) return "";
+        if (raw.startsWith("/items/")) return raw.slice("/items/".length);
+        return raw.replace(/^#/, "");
+    }
+
+    /** 判断引用是否像有效的物品引用（含 items_sprite、/items/ 或 # 开头） */
+    function isLikelyItemRef(rawRef) {
+        const ref = String(rawRef || "").toLowerCase();
+        if (!ref) return false;
+        if (ref.includes("items_sprite")) return true;
+        if (ref.includes("/items/")) return true;
+        if (ref.startsWith("#") && !ref.includes("skills_")) return true;
+        return false;
+    }
+
+    /** 获取物品名称（优先数据层 → SVG aria-label → DOM 文字 → 回退 ID） */
+    function getItemName(itemRoot, fallbackId = "") {
+        if (_dataLayer.ready && fallbackId) {
+            const bareId = normalizeCartItemId(fallbackId);
+            if (bareId) {
+                const hrid = `/items/${bareId}`;
+                const name = _dataLayer.hridToName(hrid);
+                if (name) return name;
+            }
+        }
+        if (!itemRoot || !(itemRoot instanceof Element)) return fallbackId || t("unknown_item");
+        const svgName = itemRoot.querySelector("svg[aria-label]")?.getAttribute("aria-label");
+        if (svgName) return safeText(svgName, 120);
+        const nameEl = itemRoot.querySelector('[class*="Item_name"], [class*="Item_label"]');
+        if (nameEl) {
+            const txt = safeText(nameEl.textContent, 120);
+            if (txt) return txt;
+        }
+        if (fallbackId) return fallbackId;
+        return t("unknown_item");
+    }
+
+    /** v1.4.0: 根据当前语言重新解析购物车物品的显示名称 */
+    function resolveCartDisplayName(row) {
+        if (_dataLayer.ready && row.itemId) {
+            const hrid = toItemHrid(row.itemId);
+            if (hrid) {
+                const name = _dataLayer.hridToName(hrid);
+                if (name) return name;
+            }
+        }
+        return row.name || row.itemId || t("unknown_item");
+    }
+
+    // ★ v1.3.4: 多层降级获取 sprite base 路径
+    //   优先级: 内存缓存 → Performance API → DOM 扫描 → localStorage 跨会话缓存
+    //   解决购物车图标在早期渲染时因 DOM 中尚无 items_sprite 引用而丢失的问题
+    const _spriteLS_KEY = "mwi_mm_sprite_base_v1";
+    let _spriteBaseCache = "";
+    let _spriteBaseResolved = false; // 标记是否已最终确定（非 localStorage 猜测）
+
+    /** 设置并缓存 sprite 基础路径（变更时触发购物车重绘修复图标） */
+    function _setSpriteBase(base, source) {
+        if (!base || _spriteBaseCache === base) return;
+        const old = _spriteBaseCache;
+        _spriteBaseCache = base;
+        _spriteBaseResolved = true;
+        try { localStorage.setItem(_spriteLS_KEY, base); } catch { /* ignore */ }
+        console.log(`[mwi-mm] sprite base 已确定（${source}）: ${base}`);
+        // 如果之前为空或值发生变化（如游戏更新了 hash），触发购物车重绘修复图标
+        if (old !== base && STATE.ui.cartList) {
+            setTimeout(() => renderCart(), 50);
+        }
+    }
+
+    /** 层1: Performance API — 从浏览器资源加载记录中提取 */
+    function _detectSpriteFromPerformance() {
+        try {
+            const entries = performance.getEntriesByType("resource");
+            for (const entry of entries) {
+                if (entry.name && entry.name.includes("items_sprite") && entry.name.endsWith(".svg")) {
+                    // entry.name 是完整 URL，提取相对路径
+                    const url = new URL(entry.name);
+                    return url.pathname; // 如 "/static/media/items_sprite.9c39e2ec.svg"
+                }
+            }
+        } catch { /* ignore */ }
+        return "";
+    }
+
+    /** 层2: DOM 扫描 — 从页面中已渲染的 svg use 元素提取 */
+    function _detectSpriteFromDOM() {
+        const uses = document.querySelectorAll('svg use[href*="items_sprite"], svg use[xlink\\:href*="items_sprite"]');
+        for (const use of uses) {
+            const href = use.getAttribute("href") || use.getAttribute("xlink:href") || "";
+            if (href && href.includes("#")) return href.split("#")[0];
+        }
+        return "";
+    }
+
+    /** 层3: localStorage 跨会话缓存 — 上次成功的值 */
+    function _detectSpriteFromStorage() {
+        try {
+            return localStorage.getItem(_spriteLS_KEY) || "";
+        } catch { return ""; }
+    }
+
+    /** 多层降级检测 sprite 基础路径（Performance API → DOM 扫描 → localStorage） */
+    function detectItemsSpriteBase() {
+        // 已确认的缓存直接返回
+        if (_spriteBaseCache && _spriteBaseResolved) return _spriteBaseCache;
+
+        // 层1: Performance API（最早可用，游戏 JS 加载时就请求了 sprite）
+        const fromPerf = _detectSpriteFromPerformance();
+        if (fromPerf) { _setSpriteBase(fromPerf, "Performance API"); return _spriteBaseCache; }
+
+        // 层2: DOM 扫描
+        const fromDOM = _detectSpriteFromDOM();
+        if (fromDOM) { _setSpriteBase(fromDOM, "DOM"); return _spriteBaseCache; }
+
+        // 层3: localStorage（跨会话降级，可能 hash 过期但聊胜于无）
+        if (!_spriteBaseCache) {
+            const fromLS = _detectSpriteFromStorage();
+            if (fromLS) {
+                _spriteBaseCache = fromLS; // 暂用，不标记 resolved
+                return _spriteBaseCache;
+            }
+        }
+
+        return _spriteBaseCache;
+    }
+
+    /** 启动后异步探测 sprite base，确保尽早获取 */
+    function _initSpriteBaseProbe() {
+        // 立即尝试一次
+        detectItemsSpriteBase();
+        if (_spriteBaseResolved) return;
+
+        // 未成功则定时重试（游戏加载较慢时 Performance API 可能还没有记录）
+        let retries = 0;
+        const timer = setInterval(() => {
+            retries++;
+            detectItemsSpriteBase();
+            if (_spriteBaseResolved || retries > 30) { // 最多重试 30 次（约 15 秒）
+                clearInterval(timer);
+                if (!_spriteBaseResolved && _spriteBaseCache) {
+                    // localStorage 值虽未验证，但已经是最好的了
+                    _spriteBaseResolved = true;
+                    console.log("[mwi-mm] sprite base 使用 localStorage 缓存（未验证）:", _spriteBaseCache);
+                }
+            }
+        }, 500);
+    }
+
+    /** 解析图标 href（已有包含 # 的直接返回，否则拼接 sprite base） */
+    function resolveItemIconHref(row) {
+        const raw = String(row?.iconRef || "").trim();
+        if (raw && raw.includes("#")) return raw;
+        let id = "";
+        if (raw && raw.startsWith("/items/")) {
+            id = raw.replace(/^\/items\//, "");
+        } else {
+            id = normalizeCartItemId(row?.itemId || "");
+        }
+        if (!id) return "";
+        const base = detectItemsSpriteBase();
+        if (base) return `${base}#${id}`;
+        return `#${id}`;
+    }
+
+    /** 生成物品图标的 SVG HTML */
+    function renderItemIconSvg(row) {
+        const href = resolveItemIconHref(row);
+        if (!href) return `<span class="mwi-mm-icon-fallback">?</span>`;
+        const safeHref = escapeHtml(href);
+        const title = escapeHtml(row?.name || row?.itemId || t("item"));
+        return `<svg class="mwi-mm-item-icon" aria-label="${title}" viewBox="0 0 32 32"><use href="${safeHref}" xlink:href="${safeHref}"></use></svg>`;
+    }
+
+    /** 将 bareId 转换为 hrid 格式（如 “/items/xxx”） */
+    function toItemHrid(itemId) {
+        const id = normalizeCartItemId(itemId);
+        if (!id) return "";
+        return `/items/${id}`;
+    }
+
+    /** HTML 实体转义 */
+    function escapeHtml(text) {
+        return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    /**
+     * 解析 React Fiber 树寻找拥有 handleGoToMarketplace 方法的组件实例
+     * 用于实现「一键直达市场」功能
+     */
+    function resolveMarketplaceHandlerHost() {
+        if (_fiberHostCache && (Date.now() - _fiberHostCachedAt) < FIBER_CACHE_TTL) {
+            const fn = _fiberHostCache.handleGoToMarketplace || _fiberHostCache.goToMarketplace || _fiberHostCache.openMarketplace;
+            if (typeof fn === "function") return _fiberHostCache;
+            _fiberHostCache = null; _fiberHostCachedAt = 0;
+        }
+        if (window.PGE?.core && (typeof window.PGE.core.handleGoToMarketplace === "function" || typeof window.PGE.core.goToMarketplace === "function" || typeof window.PGE.core.openMarketplace === "function")) {
+            _fiberHostCache = window.PGE.core; _fiberHostCachedAt = Date.now(); return window.PGE.core;
+        }
+        const roots = [];
+        const pushRoot = (node) => { if (!node || typeof node !== "object" || roots.includes(node)) return; roots.push(node); };
+        const rootEl = document.getElementById("root");
+        if (rootEl) {
+            pushRoot(rootEl._reactRootContainer?.current);
+            pushRoot(rootEl._reactRootContainer?._internalRoot?.current);
+            for (const key of Object.getOwnPropertyNames(rootEl)) {
+                if (key.startsWith("__reactContainer") || key.startsWith("__reactFiber") || key.startsWith("__reactInternalInstance")) pushRoot(rootEl[key]);
+            }
+        }
+        for (const key of Object.getOwnPropertyNames(document.body || {})) {
+            if (key.startsWith("__reactContainer") || key.startsWith("__reactFiber") || key.startsWith("__reactInternalInstance")) pushRoot(document.body[key]);
+        }
+        if (!roots.length) return null;
+        const seen = new Set();
+        const stack = [...roots];
+        let visited = 0;
+        while (stack.length && visited < FIBER_MAX_DEPTH) {
+            const fiber = stack.pop();
+            if (!fiber || typeof fiber !== "object" || seen.has(fiber)) continue;
+            seen.add(fiber); visited++;
+            const stateNode = fiber.stateNode;
+            if (stateNode && (typeof stateNode.handleGoToMarketplace === "function" || typeof stateNode.goToMarketplace === "function" || typeof stateNode.openMarketplace === "function")) {
+                _fiberHostCache = stateNode; _fiberHostCachedAt = Date.now(); return stateNode;
+            }
+            if (fiber.child) stack.push(fiber.child);
+            if (fiber.sibling) stack.push(fiber.sibling);
+        }
+        return null;
+    }
+
+    /** 通过 React Fiber 内部方法打开市场页面（尝试多种参数组合） */
+    function openMarketplaceByCore(itemId) {
+        const hrid = toItemHrid(itemId);
+        if (!hrid) return false;
+        const host = resolveMarketplaceHandlerHost();
+        if (!host) return false;
+        const fn = host.handleGoToMarketplace || host.goToMarketplace || host.openMarketplace;
+        if (typeof fn !== "function") return false;
+        const argSets = [[hrid, 0], [hrid], [normalizeCartItemId(itemId), 0], [normalizeCartItemId(itemId)]];
+        for (const args of argSets) {
+            try { fn.call(host, ...args); return true; } catch (e) { /* next */ }
+        }
+        return false;
+    }
+
+    /** 判断 href 是否匹配指定物品 ID */
+    function matchesItemIdFromHref(rawHref, itemId) {
+        const href = String(rawHref || "").toLowerCase();
+        const id = normalizeCartItemId(itemId).toLowerCase();
+        if (!href || !id) return false;
+        return href.includes(`#${id}`) || href.includes(`/items/${id}`) || href.endsWith(id);
+    }
+
+    /** 打开市场（通过 React 内部方法） */
+    function openMarketplaceForItem(itemId) {
+        return openMarketplaceByCore(itemId);
+    }
+
+    /** 找到当前可见的市场面板 */
+    function findVisibleMarketplacePanel() {
+        const panels = [...document.querySelectorAll('[class*="MarketplacePanel_marketplacePanel"]')];
+        return panels.find((panel) => isVisible(panel)) || null;
+    }
+
+    /** 清除所有市场高亮标记 */
+    function clearMarketTargetHighlight() {
+        document.querySelectorAll(".mwi-mm-market-target").forEach((node) => {
+            if (node instanceof Element) node.classList.remove("mwi-mm-market-target");
+        });
+    }
+
+    /** 收集市场面板中的所有物品节点 */
+    function collectMarketItemNodes(panel) {
+        if (!panel) return [];
+        const selectors = [`[class*="MarketplacePanel_marketItems"] ${SEL.itemCore}`, `[class*="MarketplacePanel_currentItem"] ${SEL.itemCore}`];
+        const out = [], seen = new Set();
+        for (const sel of selectors) {
+            for (const node of panel.querySelectorAll(sel)) {
+                if (!(node instanceof Element) || !isVisible(node) || seen.has(node)) continue;
+                seen.add(node); out.push(node);
+            }
+        }
+        return out;
+    }
+
+    /** 获取物品节点的高亮宿主元素 */
+    function getMarketHighlightHost(itemNode) {
+        return itemNode.closest('[class*="Item_itemContainer"]') || itemNode;
+    }
+
+    /** 获取购物车中所有有缺料的物品 ID 列表 */
+    function getCartLocateIds() {
+        const ids = [], seen = new Set();
+        for (const row of STATE.cart.values()) {
+            if (!row || Number(row.quantity || 0) <= 0) continue;
+            const id = normalizeCartItemId(row.itemId);
+            if (!id || seen.has(id)) continue;
+            seen.add(id); ids.push(id);
+        }
+        return ids;
+    }
+
+    /** 在市场面板中定位并高亮购物车中的物品 */
+    function locateCartItemsInMarketplace(options = {}) {
+        const targetId = normalizeCartItemId(options.targetItemId || STATE.marketTargetItemId || "");
+        const doScroll = Boolean(options.scroll);
+        clearMarketTargetHighlight();
+        const locateIds = getCartLocateIds();
+        if (!locateIds.length) {
+            STATE.marketPanelVisible = Boolean(findVisibleMarketplacePanel());
+            STATE.marketMatchCount = 0; renderStatus();
+            return { ok: false, marketOpen: STATE.marketPanelVisible, found: 0, matchedTypes: 0, totalTypes: 0 };
+        }
+        const idSet = new Set(locateIds.map((x) => x.toLowerCase()));
+        const panel = findVisibleMarketplacePanel();
+        if (!panel) {
+            STATE.marketPanelVisible = false; STATE.marketMatchCount = 0; renderStatus();
+            return { ok: false, marketOpen: false, found: 0, matchedTypes: 0, totalTypes: locateIds.length };
+        }
+        const nodes = collectMarketItemNodes(panel);
+        const matches = [], matchedTypes = new Set(), firstHostById = new Map(), seenHost = new Set();
+        for (const node of nodes) {
+            const href = extractIconRef(node) || extractUseHref(node);
+            if (!href) continue;
+            let matchedId = "";
+            for (const id of idSet) { if (matchesItemIdFromHref(href, id)) { matchedId = id; break; } }
+            if (!matchedId) continue;
+            const host = getMarketHighlightHost(node);
+            if (seenHost.has(host)) continue;
+            seenHost.add(host); host.classList.add("mwi-mm-market-target");
+            matches.push(host); matchedTypes.add(matchedId);
+            if (!firstHostById.has(matchedId)) firstHostById.set(matchedId, host);
+        }
+        STATE.marketPanelVisible = true; STATE.marketMatchCount = matchedTypes.size;
+        if (doScroll && matches.length > 0) {
+            const preferredHost = targetId ? firstHostById.get(targetId.toLowerCase()) : null;
+            const scrollHost = preferredHost || matches[0];
+            try { scrollHost.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" }); } catch (err) { scrollHost.scrollIntoView(); }
+        }
+        renderStatus();
+        return { ok: matchedTypes.size > 0, marketOpen: true, found: matches.length, matchedTypes: matchedTypes.size, totalTypes: locateIds.length };
+    }
+
+    /** 设置市场定位目标并执行定位 */
+    function setMarketTarget(itemId, options = {}) {
+        const targetId = normalizeCartItemId(itemId);
+        STATE.marketTargetItemId = targetId;
+        const result = STATE.locateEnabled ? locateCartItemsInMarketplace({ ...options, targetItemId: targetId }) : { ok: false, marketOpen: Boolean(findVisibleMarketplacePanel()), found: 0, matchedTypes: 0, totalTypes: getCartLocateIds().length, disabled: true };
+        renderCart(); return result;
+    }
+
+    /** 清除市场定位目标 */
+    function clearMarketTarget() {
+        STATE.marketTargetItemId = ""; STATE.marketMatchCount = 0;
+        STATE.marketPanelVisible = Boolean(findVisibleMarketplacePanel());
+        clearMarketTargetHighlight(); renderCart();
+    }
+
+    /** 切换市场定位功能开关 */
+    function setLocateEnabled(enabled) {
+        STATE.locateEnabled = Boolean(enabled);
+        if (!STATE.locateEnabled) { STATE.marketMatchCount = 0; clearMarketTargetHighlight(); renderCart(); renderStatus(); return; }
+        syncMarketLocator(); renderCart();
+    }
+
+    /** 同步市场定位状态（用于刷新时自动重新定位） */
+    function syncMarketLocator() {
+        if (!STATE.locateEnabled) { STATE.marketPanelVisible = Boolean(findVisibleMarketplacePanel()); STATE.marketMatchCount = 0; clearMarketTargetHighlight(); renderStatus(); return; }
+        locateCartItemsInMarketplace({ scroll: false, targetItemId: STATE.marketTargetItemId });
+    }
+
+    /** 判断物品是否为金币（库存同步时跳过） */
+    function isCoinItem(itemId) {
+        const id = String(itemId || "").toLowerCase();
+        return id.includes("coin") || id.includes("gold");
+    }
+
+    let _invSnapshot = null;   // DOM 扫描库存快照缓存
+    let _invSnapshotAt = 0;     // 缓存时间戳
+
+    /** 扫描 DOM 获取库存快照（有 WS 时直接用 WS 数据，否则遍历背包面板） */
+    function scanInventoryDOM(forceRefresh = false) {
+        if (_wsInventory.ready) { const snapshot = _wsInventory.getSnapshot(); _invSnapshot = snapshot; _invSnapshotAt = Date.now(); return snapshot; }
+        const now = Date.now();
+        if (!forceRefresh && _invSnapshot && (now - _invSnapshotAt) < 200) return _invSnapshot;
+        const result = new Map();
+        const inventoryPanels = document.querySelectorAll('[class*="Inventory_inventory"]');
+        if (!inventoryPanels.length) { _invSnapshot = result; _invSnapshotAt = now; return result; }
+        for (const panel of inventoryPanels) {
+            for (const container of panel.querySelectorAll('[class*="Item_itemContainer"]')) {
+                try {
+                    const useEl = container.querySelector('svg use[href]');
+                    if (!useEl) continue;
+                    const href = useEl.getAttribute("href") || "";
+                    const hashIdx = href.lastIndexOf("#");
+                    if (hashIdx < 0) continue;
+                    const rawId = href.slice(hashIdx + 1);
+                    if (!rawId) continue;
+                    const countEl = container.querySelector('[class*="Item_count"]');
+                    const countText = countEl?.textContent?.trim() || "0";
+                    const count = parseInt(countText.replace(/[,\s]/g, ""), 10) || 0;
+                    if (count > 0) result.set(rawId, (result.get(rawId) || 0) + count);
+                } catch (err) { /* ignore */ }
+            }
+        }
+        _invSnapshot = result; _invSnapshotAt = now; return result;
+    }
+
+    /** 获取指定物品的库存数量（WS 优先，回退 DOM） */
+    function getInventoryCount(itemId) {
+        const id = normalizeCartItemId(itemId);
+        if (!id) return 0;
+        if (_wsInventory.ready) return _wsInventory.getCount(id);
+        const snapshot = scanInventoryDOM();
+        return snapshot.get(id) || 0;
+    }
+
+    // ── v1.3.5: 有效库存（扣除其他计划锁定量）──────────────────
+    /** 获取有效库存（实际库存减去其他制作计划的锁定量） */
+    function getEffectiveInventory(itemId, excludeRecipeHrid) {
+        const raw = getInventoryCount(itemId);
+        if (!STATE.craftingPlansEnabled || !STATE.craftingPlans.size) return raw;
+        const bareId = normalizeCartItemId(itemId);
+        let locked = 0;
+        for (const plan of STATE.craftingPlans.values()) {
+            if (plan.recipeHrid === excludeRecipeHrid) continue;
+            if (plan.status === "completed") continue;
+            locked += plan.materials[bareId] || 0;
+        }
+        return Math.max(0, raw - locked);
+    }
+
+    /** 重置所有购物车项的基线库存（用于重新校准同步） */
+    function resetAllBaselines() {
+        const snapshot = scanInventoryDOM(true);
+        for (const row of STATE.cart.values()) {
+            const id = normalizeCartItemId(row.itemId);
+            row.baselineStock = snapshot.get(id) || 0;
+        }
+        saveCart();
+    }
+
+    /** 购物车面板是否处于打开状态 */
+    function isDrawerOpen() { return STATE.ui.drawer && STATE.ui.drawer.style.display === "flex"; }
+
+    // ── v1.4.1: 采购完成 → 导航栏内联横幅（替代自动跳转，满足 1:1 人机对应） ──
+    /** 当物品购齐被移出购物车时，通知导航栏显示内联完成横幅 */
+    function _notifyNavItemFulfilled(removedNames) {
+        if (!findVisibleMarketplacePanel()) return;
+        // 找下一个待购物品
+        const candidates = [...STATE.cart.values()]
+            .filter(r => r.quantity > 0 && !isCoinItem(r.itemId))
+            .sort((a, b) => {
+                if (a.starred && !b.starred) return -1;
+                if (!a.starred && b.starred) return 1;
+                return a.name.localeCompare(b.name, _getLocale());
+            });
+        _purchaseNav._showFulfilledBanner(removedNames, candidates[0] || null);
+    }
+
+    /**
+     * 库存同步：将购物车缺料与实际库存变化对比
+     * - 库存增加 → 减少缺料
+     * - 库存减少 → 更新基线
+     * - 常备量不足 → 自动回填
+     */
+    function syncCartWithInventory() {
+        if (!STATE.inventorySyncEnabled || !STATE.cart.size) return;
+        const snapshot = scanInventoryDOM(true);
+        if (!snapshot.size) return;
+        let changed = false;
+        const toRemove = [];
+        for (const [id, row] of STATE.cart) {
+            if (isCoinItem(id)) continue;
+            const currentStock = snapshot.get(normalizeCartItemId(id)) || 0;
+            if (row.baselineStock == null) { row.baselineStock = currentStock; continue; }
+            if (currentStock === row.baselineStock) continue;
+            if (currentStock < row.baselineStock) { row.baselineStock = currentStock; continue; }
+            const acquired = currentStock - row.baselineStock;
+            row.baselineStock = currentStock;
+            row.quantity = Math.max(0, row.quantity - acquired);
+            changed = true;
+            if (row.quantity <= 0) {
+                if (row.starred) row.quantity = 0;
+                else toRemove.push(id);
+            }
+        }
+        const refilled = [];
+        for (const [id, row] of STATE.cart) {
+            if (!row.starred || !row.threshold || row.threshold <= 0) continue;
+            const currentStock = snapshot.get(normalizeCartItemId(id)) || 0;
+            if (currentStock < row.threshold) {
+                const newQty = row.threshold - currentStock;
+                if (newQty !== row.quantity) {
+                    row.quantity = newQty; row.baselineStock = currentStock;
+                    row._justRefilled = true; changed = true; refilled.push(resolveCartDisplayName(row));
+                }
+            }
+        }
+        const removedNames = toRemove.map(id => { const row = STATE.cart.get(id); return row ? resolveCartDisplayName(row) : ""; }).filter(Boolean);
+        for (const id of toRemove) STATE.cart.delete(id);
+        if (changed) {
+            saveCart(); renderCart();
+            if (toRemove.length) showToast(t("toast_auto_removed", toRemove.length), "info");
+            if (refilled.length === 1) showToast(t("toast_refill_one", refilled[0]), "info");
+            else if (refilled.length > 1) showToast(t("toast_refill_multi", refilled[0], refilled.length), "info");
+            const activeCount = [...STATE.cart.values()].filter(r => r.quantity > 0).length;
+            if (activeCount === 0 && isDrawerOpen() && STATE.cartNonEmptyOnOpen && STATE.autoCollapseEnabled) {
+                closeCartDrawer(); showToast(t("toast_all_fulfilled"), "success");
+            }
+            if (toRemove.length) _notifyNavItemFulfilled(removedNames);
+        }
+    }
+
+    let _syncDebounceTimer = null;
+    /** 触发库存同步（去抖） */
+    function triggerInventorySync(delay = 50) {
+        if (!STATE.inventorySyncEnabled) return;
+        if (_syncDebounceTimer) return;
+        _syncDebounceTimer = setTimeout(() => { _syncDebounceTimer = null; syncCartWithInventory(); }, delay);
+    }
+
+    /**
+     * 判断当前是否在「当前行动」模式（而非配方列表）
+     * ★ v1.3.7: 接受 scopeModal 参数，将 tab 搜索限定在 modal 所属的面板容器内，
+     *   避免其他技能面板的 tab 状态干扰当前面板的判断。
+     */
+    function isCurrentActionMode(scopeModal) {
+        let searchRoot = document;
+        if (scopeModal) {
+            const container = scopeModal.closest('[class*="MainPanel_subPanelContainer"]')
+                || scopeModal.closest('[class*="MainPanel_mainPanel"]')
+                || scopeModal.parentElement;
+            if (container) searchRoot = container;
+        }
+        const selectedTabs = [...searchRoot.querySelectorAll('button.Mui-selected[role="tab"], button[aria-selected="true"][role="tab"]')];
+        for (const tab of selectedTabs) {
+            if (!isVisible(tab)) continue;
+            const text = safeText(tab.textContent || "", 40);
+            if (/当前行动|current\s*action/i.test(text)) return true;
+        }
+        return false;
+    }
+
+    /** 判断弹窗是否包含原生行动次数输入框 */
+    function hasNativeActionCountInput(modal) {
+        if (!modal) return false;
+        const firstContainer = modal.querySelector('[class*="SkillActionDetail_maxActionCountInput"]');
+        if (!firstContainer) return false;
+        const input = firstContainer.querySelector('input[class*="Input_input"]');
+        return input ? isVisible(input) : false;
+    }
+
+    /** 等待游戏页面加载完成（检测 GamePage 存在且无加载遮罩） */
+    function waitForGameReady() {
+        return new Promise((resolve) => {
+            function check() {
+                const gamePage = document.querySelector('[class*="GamePage_gamePage"], [class^="GamePage"]');
+                if (!gamePage) return false;
+                const loadingOverlay = document.querySelector('[class*="LoadingContainer"], [class*="ConnectionStatusBar_disconnected"], [class*="ConnectionStatus_connecting"]');
+                if (loadingOverlay && isVisible(loadingOverlay)) return false;
+                return true;
+            }
+            if (check()) { setTimeout(resolve, 1500); return; }
+            let elapsed = 0;
+            const interval = setInterval(() => {
+                elapsed += 500;
+                if (check() || elapsed >= 30000) { clearInterval(interval); setTimeout(resolve, 1500); }
+            }, 500);
+        });
+    }
+
+    /** 显示 FAB 悬浮按钮并恢复保存的位置 */
+    function showFab() {
+        if (!STATE.ui.tab) return;
+        STATE.ui.tab.style.display = "flex";
+        requestAnimationFrame(() => {
+            const savedPos = loadFabPosition();
+            if (savedPos) { const pos = applyFabPosition(STATE.ui.tab, savedPos.x, savedPos.y); saveFabPosition(pos.x, pos.y); }
+            else { const pos = applyFabPosition(STATE.ui.tab, window.innerWidth - 62, Math.max(12, Math.round(window.innerHeight * 0.42))); saveFabPosition(pos.x, pos.y); }
+        });
+    }
+
+    /** 显示 Toast 提示消息（1.8s 后淡出） */
+    function showToast(msg, tone = "info") {
+        const box = document.createElement("div");
+        box.className = `mwi-mm-toast mwi-mm-toast-${tone}`;
+        box.textContent = msg;
+        document.body.appendChild(box);
+        setTimeout(() => { box.style.opacity = "0"; box.style.transform = "translateY(-8px)"; }, 1800);
+        setTimeout(() => box.remove(), 2300);
+    }
+
+    // ── 持久化 ──────────────────────────────────────────────────
+
+    /** 保存购物车数据到 localStorage */
+    function saveCart() {
+        try {
+            const payload = { savedAt: nowIso(), items: [...STATE.cart.values()] };
+            localStorage.setItem(SCRIPT.cartKey, JSON.stringify(payload));
+        } catch (err) {
+            if (err.name === "QuotaExceededError") { console.warn("[mwi-mm] localStorage 配额已满"); showToast("存储空间不足，清单可能未保存", "error"); }
+            else console.warn("[mwi-mm] save cart failed", err);
+        }
+    }
+
+    /** 从 localStorage 加载购物车数据 */
+    function loadCart() {
+        try {
+            const raw = localStorage.getItem(SCRIPT.cartKey);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            const items = Array.isArray(parsed?.items) ? parsed.items : [];
+            for (const row of items) {
+                if (!row || !row.itemId) continue;
+                const itemId = normalizeCartItemId(row.itemId);
+                if (!itemId) continue;
+                const qty = Number(row.quantity || 0);
+                if (!Number.isFinite(qty) || qty < 0) continue;
+                if (qty <= 0 && !row.starred) continue;
+                STATE.cart.set(itemId, {
+                    itemId, name: row.name || itemId, iconRef: row.iconRef || "",
+                    quantity: qty, starred: Boolean(row.starred),
+                    threshold: (typeof row.threshold === "number" && row.threshold > 0) ? row.threshold : null,
+                    baselineStock: row.baselineStock ?? null, source: row.source || "unknown", updatedAt: row.updatedAt || nowIso()
+                });
+            }
+        } catch (err) { console.warn("[mwi-mm] load cart failed", err); }
+    }
+
+    /** 保存开关状态到 localStorage */
+    function saveToggles() {
+        try {
+            localStorage.setItem(SCRIPT.togglesKey, JSON.stringify({
+                locateEnabled: STATE.locateEnabled,
+                drawerLocked: STATE.drawerLocked,
+                includeUpgrade: STATE.includeUpgrade,
+                inventorySyncEnabled: STATE.inventorySyncEnabled,
+                autoCollapseEnabled: STATE.autoCollapseEnabled,
+                autoPrefillEnabled: STATE.autoPrefillEnabled,
+                purchaseNavEnabled: STATE.purchaseNavEnabled,
+                craftingPlansEnabled: STATE.craftingPlansEnabled,
+                questPanelEnabled: STATE.questPanelEnabled,
+                zScoreIndex: STATE.zScoreIndex,
+                guzzlingPouchLevel: STATE.guzzlingPouchLevel
+            }));
+        } catch (err) { /* ignore */ }
+    }
+
+    /** 从 localStorage 加载开关状态 */
+    function loadToggles() {
+        try {
+            const raw = localStorage.getItem(SCRIPT.togglesKey);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (typeof parsed.locateEnabled === "boolean") STATE.locateEnabled = parsed.locateEnabled;
+            if (typeof parsed.drawerLocked === "boolean") STATE.drawerLocked = parsed.drawerLocked;
+            if (typeof parsed.includeUpgrade === "boolean") STATE.includeUpgrade = parsed.includeUpgrade;
+            if (typeof parsed.inventorySyncEnabled === "boolean") STATE.inventorySyncEnabled = parsed.inventorySyncEnabled;
+            if (typeof parsed.autoCollapseEnabled === "boolean") STATE.autoCollapseEnabled = parsed.autoCollapseEnabled;
+            if (typeof parsed.autoPrefillEnabled === "boolean") STATE.autoPrefillEnabled = parsed.autoPrefillEnabled;
+            if (typeof parsed.purchaseNavEnabled === "boolean") STATE.purchaseNavEnabled = parsed.purchaseNavEnabled;
+            if (typeof parsed.craftingPlansEnabled === "boolean") STATE.craftingPlansEnabled = parsed.craftingPlansEnabled;
+            if (typeof parsed.questPanelEnabled === "boolean") STATE.questPanelEnabled = parsed.questPanelEnabled;
+            if (typeof parsed.zScoreIndex === "number" && parsed.zScoreIndex >= 0 && parsed.zScoreIndex < Z_OPTIONS.length) STATE.zScoreIndex = parsed.zScoreIndex;
+            if (typeof parsed.guzzlingPouchLevel === "number" && parsed.guzzlingPouchLevel >= -1 && parsed.guzzlingPouchLevel <= 20) STATE.guzzlingPouchLevel = parsed.guzzlingPouchLevel;
+        } catch (err) { /* ignore */ }
+    }
+
+    // ── v1.3.5: 制作计划持久化 ──────────────────────────────────
+
+    /** 保存制作计划到 localStorage */
+    function savePlans() {
+        try {
+            const arr = [...STATE.craftingPlans.values()];
+            localStorage.setItem(SCRIPT.plansKey, JSON.stringify({ savedAt: nowIso(), plans: arr }));
+        } catch (err) { /* ignore */ }
+    }
+
+    /** 从 localStorage 加载制作计划 */
+    function loadPlans() {
+        try {
+            const raw = localStorage.getItem(SCRIPT.plansKey);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            const plans = Array.isArray(parsed?.plans) ? parsed.plans : [];
+            for (const p of plans) {
+                if (!p || !p.recipeHrid) continue;
+                if (p.status === "completed") continue;
+                STATE.craftingPlans.set(p.recipeHrid, {
+                    recipeHrid: p.recipeHrid,
+                    recipeName: p.recipeName || p.recipeHrid,
+                    craftCount: p.craftCount || 1,
+                    materials: p.materials || {},
+                    materialsPerAction: p.materialsPerAction || {},
+                    status: p.status || "active",
+                    craftedCount: p.craftedCount || 0,
+                    createdAt: p.createdAt || nowIso(),
+                    updatedAt: p.updatedAt || nowIso()
+                });
+            }
+        } catch (err) { console.warn("[mwi-mm] load plans failed", err); }
+    }
+
+    /** 创建或更新制作计划（记录配方所需材料及数量） */
+    function createOrUpdatePlan(recipeHrid, recipeName, craftCount, allItems) {
+        if (!recipeHrid) return;
+        const materials = {};
+        const materialsPerAction = {};
+        for (const item of allItems) {
+            const bareId = normalizeCartItemId(item.itemId);
+            if (bareId && !isCoinItem(bareId)) {
+                materials[bareId] = item.totalNeeded;
+                materialsPerAction[bareId] = item.needPerAction || (craftCount > 0 ? item.totalNeeded / craftCount : item.totalNeeded);
+            }
+        }
+        if (!Object.keys(materials).length) return;
+        const existing = STATE.craftingPlans.get(recipeHrid);
+        if (existing) {
+            existing.materials = materials;
+            existing.materialsPerAction = materialsPerAction;
+            existing.craftCount = craftCount;
+            existing.craftedCount = 0;
+            existing.status = "active";
+            existing.updatedAt = nowIso();
+        } else {
+            STATE.craftingPlans.set(recipeHrid, {
+                recipeHrid, recipeName, craftCount, materials, materialsPerAction,
+                status: "active", craftedCount: 0,
+                createdAt: nowIso(), updatedAt: nowIso()
+            });
+        }
+        savePlans();
+        renderPlansUI();
+    }
+
+    /** 更新计划制作数量并重算材料锁定 */
+    function updatePlanCraftCount(recipeHrid, newCount) {
+        const plan = STATE.craftingPlans.get(recipeHrid);
+        if (!plan) return;
+        const count = Math.max(1, Math.round(newCount) || 1);
+        plan.craftCount = count;
+        // 用 perAction 重算总锁定量
+        if (plan.materialsPerAction) {
+            for (const [bareId, perAction] of Object.entries(plan.materialsPerAction)) {
+                plan.materials[bareId] = Math.ceil(perAction * count - 1e-9);
+            }
+        }
+        plan.updatedAt = nowIso();
+        savePlans();
+        renderPlansUI();
+        STATE.lastDataSignature = "";
+        refreshNow();
+    }
+
+    /** 删除指定制作计划 */
+    function removePlan(recipeHrid) {
+        STATE.craftingPlans.delete(recipeHrid);
+        savePlans();
+        renderPlansUI();
+        STATE.lastDataSignature = "";
+        refreshNow();
+    }
+
+    /** 清空所有制作计划 */
+    function clearAllPlans() {
+        STATE.craftingPlans.clear();
+        savePlans();
+        renderPlansUI();
+        STATE.lastDataSignature = "";
+        refreshNow();
+    }
+
+    // ── 购物车操作 ────────────────────────────────────────────────
+
+    /** 添加物品到购物车（已存在则累加数量） */
+    function addToCart(item) {
+        if (!item || !item.itemId) return;
+        const itemId = normalizeCartItemId(item.itemId);
+        if (!itemId) return;
+        const qty = Number(item.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) return;
+        const existing = STATE.cart.get(itemId);
+        if (existing) {
+            existing.quantity += qty; existing.updatedAt = nowIso();
+            if (!existing.name && item.name) existing.name = item.name;
+            if (item.iconRef) existing.iconRef = item.iconRef;
+            if (item.source) existing.source = item.source;
+        } else {
+            STATE.cart.set(itemId, { itemId, name: item.name || itemId, iconRef: item.iconRef || "", quantity: qty, starred: false, threshold: null, baselineStock: getInventoryCount(itemId), source: item.source || "manual", updatedAt: nowIso() });
+        }
+        saveCart(); renderCart();
+    }
+
+    /** 更新购物车物品数量（≤ 0 则删除或保留收藏） */
+    function updateCartItemQty(itemId, newQty) {
+        const id = normalizeCartItemId(itemId);
+        if (!id) return;
+        const row = STATE.cart.get(id);
+        if (!row) return;
+        const qty = Number(newQty);
+        if (!Number.isFinite(qty) || qty <= 0) {
+            if (row.starred) row.quantity = 0;
+            else STATE.cart.delete(id);
+        } else { row.quantity = qty; row.baselineStock = getInventoryCount(id); row.updatedAt = nowIso(); }
+        saveCart(); renderCart();
+    }
+
+    /** 从购物车移除物品 */
+    function removeCartItem(itemId) { STATE.cart.delete(normalizeCartItemId(itemId)); saveCart(); renderCart(); }
+
+    /** 切换购物车物品的收藏状态 */
+    function toggleCartItemStar(itemId) {
+        const id = normalizeCartItemId(itemId);
+        if (!id) return;
+        const row = STATE.cart.get(id);
+        if (!row) return;
+        if (row.starred && row.threshold) row.threshold = null;
+        row.starred = !row.starred;
+        if (!row.starred && row.quantity <= 0) STATE.cart.delete(id);
+        saveCart(); renderCart();
+    }
+
+    /** 清空整个购物车 */
+    function clearCart() { STATE.cart.clear(); saveCart(); renderCart(); }
+
+    /** 清除未收藏物品 */
+    function clearNonStarred() {
+        let removed = 0;
+        for (const [id, row] of STATE.cart) { if (!row.starred) { STATE.cart.delete(id); removed++; } }
+        saveCart(); renderCart(); return removed;
+    }
+
+    /** 设置物品常备量阈值（低于此值自动回填缺料） */
+    function setCartItemThreshold(itemId, value) {
+        const id = normalizeCartItemId(itemId);
+        if (!id) return;
+        const row = STATE.cart.get(id);
+        if (!row) return;
+        const val = Number(value);
+        if (!Number.isFinite(val) || val <= 0) { row.threshold = null; }
+        else {
+            row.threshold = Math.ceil(val);
+            if (!row.starred) row.starred = true;
+            const currentStock = getInventoryCount(id);
+            if (currentStock < row.threshold) { row.quantity = row.threshold - currentStock; row.baselineStock = currentStock; }
+        }
+        saveCart(); renderCart();
+    }
+
+    /** 清除物品常备量阈值 */
+    function clearCartItemThreshold(itemId) { setCartItemThreshold(itemId, 0); }
+
+    // ── 面板检测 ──────────────────────────────────────────────────
+
+    // ★ v1.3.4: 获取当前可见的主面板容器（非 hidden 的 subPanelContainer）
+    //   游戏切换技能页面时不销毁旧面板，只是用 MainPanel_hidden 隐藏容器。
+    //   旧面板的 SkillActionDetail 仍留在 DOM 中，如果搜索整个 document 会找到旧面板。
+    //   限定在可见容器内搜索，彻底避免跨面板误匹配。
+    function _getVisibleMainContainer() {
+        // 优先: 没有 MainPanel_hidden 的 subPanelContainer
+        const containers = document.querySelectorAll('[class*="MainPanel_subPanelContainer"]');
+        for (const c of containers) {
+            const cls = c.className || "";
+            if (cls.includes("hidden") || cls.includes("Hidden")) continue;
+            if (isVisible(c)) return c;
+        }
+        return null;
+    }
+
+    /** 在可见的主面板容器内查找当前激活的技能制作面板 */
+    function findActiveModal() {
+        // v1.3.4: 在当前可见的主面板容器内搜索，避免找到隐藏的旧面板
+        const scope = _getVisibleMainContainer() || document;
+        const nodes = [...scope.querySelectorAll(SEL.detailRoot)];
+        for (const node of nodes) {
+            if (!isVisible(node)) continue;
+            if (!node.querySelector(SEL.requirements)) continue;
+            return node;
+        }
+        return null;
+    }
+
+    /** 查找当前可见的房屋建造面板（Modal 弹窗中） */
+    function findActiveHousePanel() {
+        // ★ v1.3.5 修复: 房屋面板在 Modal 弹窗中（Modal_modal → HousePanel_modalContent），
+        //   不在 MainPanel_subPanelContainer 内，因此直接搜索 document，
+        //   不受 _getVisibleMainContainer() 的范围限制。
+        const nodes = [...document.querySelectorAll(SEL.houseRoot)];
+        for (const node of nodes) {
+            if (!isVisible(node)) continue;
+            if (!node.querySelector(SEL.houseRequirements)) continue;
+            return node;
+        }
+        return null;
+    }
+
+    // ── v1.3.0: 数据层路径 — 从面板标题识别配方 ──────────────────
+
+    /** 从技能面板中提取配方标题文字 */
+    function _extractPanelTitle(modal) {
+        for (const sel of [
+            '[class*="SkillActionDetail_name"]',
+            '[class*="SkillActionDetail_title"]',
+            '[class*="SkillActionDetail_header"]'
+        ]) {
+            const el = modal.querySelector(sel);
+            if (el && isVisible(el)) {
+                const text = textWithoutInjected(el).trim();
+                if (text && text.length > 0 && text.length < 80) return text;
+            }
+        }
+        return "";
+    }
+
+    /** 通过 SVG 图标匹配产出物品，反向查找对应的制作配方 */
+    function _resolveActionBySvg(modal) {
+        if (!_dataLayer._outputToAction) return null;
+        const svgUses = [...modal.querySelectorAll("svg use")];
+        const candidates = new Map();
+        for (const use of svgUses) {
+            const href = use.getAttribute("href") || use.getAttribute("xlink:href") || "";
+            if (!href.includes("items_sprite") || !href.includes("#")) continue;
+            const bareId = href.split("#").pop();
+            if (!bareId) continue;
+            const itemHrid = `/items/${bareId}`;
+            const action = _dataLayer._outputToAction.get(itemHrid);
+            if (action && action.inputItems && action.inputItems.length > 0) {
+                candidates.set(action.hrid, action);
+            }
+        }
+        if (candidates.size === 1) return [...candidates.values()][0];
+        return null;
+    }
+
+    /**
+     * 从数据层构建缺料信息（优先于 DOM 解析）
+     * 白名单策略：仅当 regularComponent 存在时才使用数据层，
+     * 避免在炼金/强化之类面板上误匹配。
+     */
+    function _buildRequirementsFromData(modal) {
+        // ★ v1.3.4: 白名单策略 — 仅制作面板走数据层路径
+        //   制作面板内含 SkillActionDetail_regularComponent，炼金和强化面板没有此元素。
+        //   采用白名单而非黑名单，彻底解决 React 分帧渲染导致的时序问题：
+        //   若 DOM 尚未就绪，regularComponent 不存在 → 自然跳过 → 安全回退 DOM 解析
+        if (!modal.querySelector('[class*="SkillActionDetail_regularComponent"]')) return null;
+
+        const title = _extractPanelTitle(modal);
+        let actionEntry = title ? _dataLayer.resolveActionByTitle(title) : null;
+        if (!actionEntry) actionEntry = _resolveActionBySvg(modal);
+        if (!actionEntry || !actionEntry.inputItems || !actionEntry.inputItems.length) return null;
+
+        if (actionEntry.function !== "/action_functions/production") return null;
+
+        let actionCount = readActionCount(modal);
+        const inCurrentAction = isCurrentActionMode(modal);
+        const noNativeInput = !hasNativeActionCountInput(modal);
+        const needManualCount = inCurrentAction && noNativeInput;
+
+        if (needManualCount && STATE.manualActionCount > 0) {
+            actionCount = { value: STATE.manualActionCount, raw: String(STATE.manualActionCount), infinite: false };
+        }
+
+        const requirementsEl = modal.querySelector(SEL.requirements);
+        const requirementItems = requirementsEl ? [...requirementsEl.querySelectorAll(`:scope > ${SEL.requirementItems}`)] : [];
+        const inventoryEls = requirementsEl ? [...requirementsEl.querySelectorAll(`:scope > ${SEL.requirementInventory}`)] : [];
+        const inputEls = requirementsEl ? [...requirementsEl.querySelectorAll(`:scope > ${SEL.requirementInput}`)] : [];
+
+        if (requirementItems.length > 0 && requirementItems.length !== actionEntry.inputItems.length) {
+            return null;
+        }
+
+        // v1.3.2: 交叉校验 — 确认 DOM 中的材料图标与数据层配方的材料一致
+        if (requirementItems.length > 0) {
+            const dataInputIds = new Set(actionEntry.inputItems.map(i => i.itemHrid.replace(/^\/items\//, "").toLowerCase()));
+            let mismatch = false;
+            let identified = 0;
+            for (const itemWrap of requirementItems) {
+                const itemCore = itemWrap.querySelector(SEL.itemCore) || itemWrap;
+                const href = extractIconRef(itemCore) || extractUseHref(itemCore);
+                const domId = isLikelyItemRef(href) ? normalizeItemId(href).toLowerCase() : "";
+                if (domId) {
+                    identified++;
+                    if (!dataInputIds.has(domId)) { mismatch = true; break; }
+                }
+            }
+            if (mismatch) return null;
+            if (identified === 0) return null;
+        }
+
+        const artisanBuff = _dataLayer._getArtisanBuff(actionEntry.type);
+        const recipeHrid = actionEntry.hrid || "";
+
+        const requirements = actionEntry.inputItems.map((input, index) => {
+            const bareId = input.itemHrid.replace(/^\/items\//, "");
+            const name = _dataLayer.hridToName(input.itemHrid) || getItemName(requirementItems[index]?.querySelector(SEL.itemCore), bareId);
+            // ★ v1.3.5: 使用有效库存（扣除其他计划的锁定量）
+            const currentStock = getEffectiveInventory(bareId, recipeHrid);
+            // ★ v1.4.3: Z-score 概率模型替代线性扣减
+            const zVal = _zScoreCalc.getActiveZ();
+            const { expected: _zExpected, margin: _zMargin, total: _zTotal } = _zScoreCalc.calcMaterials(input.count, actionCount.value, artisanBuff, zVal);
+            const needPerAction = input.count * (1 - artisanBuff); // 保留用于显示
+            const totalNeeded = _zExpected;
+            const totalNeededCeil = _zTotal;
+            const missing = Math.max(0, totalNeededCeil - currentStock);
+
+            return {
+                type: "material", index, itemId: bareId, name, currentStock,
+                needPerAction, totalNeeded, missing, missingRounded: missing,
+                canAddToCart: true, iconRef: input.itemHrid,
+                _zExpected, _zMargin, _zTotal,
+                itemWrap: requirementItems[index] || null,
+                inventoryEl: inventoryEls[index] || null,
+                inputEl: inputEls[index] || null
+            };
+        });
+
+        let upgrade = null;
+        const upgradeMeta = { containerFound: false, hasSelected: false, href: "", countText: "", parseSource: "", candidateCount: 0 };
+
+        if (STATE.includeUpgrade && actionEntry.upgradeItemHrid && actionEntry.upgradeItemHrid !== "") {
+            const upgHrid = actionEntry.upgradeItemHrid;
+            const upgBareId = upgHrid.replace(/^\/items\//, "");
+            const upgName = _dataLayer.hridToName(upgHrid) || getItemName(null, upgBareId);
+            let upgStock = getEffectiveInventory(upgBareId, recipeHrid);
+            const upgNeedPerAction = 1;
+            const upgTotalNeeded = upgNeedPerAction * actionCount.value;
+            const upgTotalCeil = Math.ceil(upgTotalNeeded - 1e-9);
+
+            const matchingReq = requirements.find(r => r.itemId === upgBareId);
+            let effectiveStock = upgStock;
+            if (matchingReq) effectiveStock = Math.max(0, upgStock - matchingReq.totalNeeded);
+            const upgMissing = Math.max(0, upgTotalCeil - effectiveStock);
+
+            const container = findBestUpgradeContainer(modal);
+            const countEl = container ? pickBestCountElement(container) : null;
+
+            upgrade = {
+                type: "upgrade", itemId: upgBareId, name: upgName, iconRef: upgHrid,
+                currentStock: upgStock, needPerAction: upgNeedPerAction, totalNeeded: upgTotalNeeded,
+                missing: upgMissing, missingRounded: upgMissing,
+                canAddToCart: true, container: container || null, countEl
+            };
+            upgradeMeta.containerFound = Boolean(container);
+            upgradeMeta.hasSelected = true;
+            upgradeMeta.href = upgHrid;
+        }
+
+        const all = upgrade ? [...requirements, upgrade] : requirements;
+        const missingList = all.filter(x => {
+            if (!x || x.missingRounded <= 0) return false;
+            if (x.itemId) return !isCoinItem(x.itemId);
+            return true;
+        });
+
+        return {
+            actionCount, requirements, upgrade, upgradeMeta,
+            totalMissingTypes: missingList.length,
+            totalMissingQty: missingList.reduce((sum, r) => sum + r.missingRounded, 0),
+            missingList, isCurrentAction: inCurrentAction, needManualCount,
+            _dataLayerUsed: true,
+            _artisanBuff: artisanBuff,
+            _recipeHrid: recipeHrid,
+            _recipeName: title || actionEntry.name || "",
+            _isUpgradeChainRecipe: !!(actionEntry.upgradeItemHrid),
+            _outputItemHrid: actionEntry.outputItems?.[0]?.itemHrid || ""
+        };
+    }
+
+    /**
+     * 从制作面板提取缺料数据（DOM 回退路径）
+     * 优先尝试数据层解析，失败则通过 DOM 元素读取库存/需求。
+     */
+    function extractRequirements(modal) {
+        if (_dataLayer.ready) {
+            const dataResult = _buildRequirementsFromData(modal);
+            if (dataResult) return dataResult;
+        }
+
+        const requirementsEl = modal.querySelector(SEL.requirements);
+        if (!requirementsEl) {
+            return { actionCount: { value: 1, raw: "", infinite: false }, requirements: [], upgrade: null, totalMissingTypes: 0, totalMissingQty: 0, isCurrentAction: false, needManualCount: false };
+        }
+
+        let actionCount = readActionCount(modal);
+        const inCurrentAction = isCurrentActionMode(modal);
+        const noNativeInput = !hasNativeActionCountInput(modal);
+        const needManualCount = inCurrentAction && noNativeInput;
+
+        if (needManualCount && STATE.manualActionCount > 0) {
+            actionCount = { value: STATE.manualActionCount, raw: String(STATE.manualActionCount), infinite: false };
+        }
+
+        // v1.3.5: 尝试获取 recipeHrid 用于有效库存计算
+        // 仅生产类配方使用有效库存（与数据层白名单策略一致），炼金/强化不参与锁定计算
+        let domRecipeHrid = "";
+        if (_dataLayer.ready) {
+            const title = _extractPanelTitle(modal);
+            const actionEntry = title ? _dataLayer.resolveActionByTitle(title) : null;
+            if (actionEntry && actionEntry.function === "/action_functions/production") {
+                domRecipeHrid = actionEntry.hrid || "";
+            }
+        }
+
+        const requirementItems = [...requirementsEl.querySelectorAll(`:scope > ${SEL.requirementItems}`)];
+        const inventoryEls = [...requirementsEl.querySelectorAll(`:scope > ${SEL.requirementInventory}`)];
+        const inputEls = [...requirementsEl.querySelectorAll(`:scope > ${SEL.requirementInput}`)];
+
+        const requirements = requirementItems.map((itemWrap, index) => {
+            const itemCore = itemWrap.querySelector(SEL.itemCore) || itemWrap;
+            const itemHref = extractIconRef(itemCore) || extractUseHref(itemCore);
+            const itemId = isLikelyItemRef(itemHref) ? normalizeItemId(itemHref) : "";
+            const name = getItemName(itemCore, itemId);
+            const inventoryEl = inventoryEls[index] || null;
+            const inputEl = inputEls[index] || null;
+            const inventoryText = textWithoutInjected(inventoryEl) || "0";
+            const inputText = textWithoutInjected(inputEl) || "0";
+
+            let currentStock;
+            if (_wsInventory.ready && itemId) currentStock = domRecipeHrid ? getEffectiveInventory(itemId, domRecipeHrid) : _wsInventory.getCount(itemId);
+            else currentStock = parseInventoryValue(inventoryText);
+
+            const resolved = resolveNeed(inputText, actionCount.value);
+            const needPerAction = resolved.needPerAction;
+            const totalNeeded = resolved.totalNeeded;
+            if (resolved.stockOverride != null && !_wsInventory.ready) currentStock = resolved.stockOverride;
+            const totalNeededCeil = Math.ceil(totalNeeded - 1e-9);
+            const missing = Math.max(0, totalNeededCeil - currentStock);
+
+            return { type: "material", index, itemId, name, currentStock, needPerAction, totalNeeded, missing, missingRounded: missing, canAddToCart: Boolean(itemId), iconRef: itemHref || "", itemWrap, inventoryEl, inputEl };
+        });
+
+        const { upgrade, upgradeMeta } = extractUpgradeFromModal(modal, actionCount);
+        const effectiveUpgrade = STATE.includeUpgrade ? upgrade : null;
+
+        if (effectiveUpgrade && effectiveUpgrade.itemId) {
+            if (_wsInventory.ready) effectiveUpgrade.currentStock = _wsInventory.getCount(effectiveUpgrade.itemId);
+            const upgId = normalizeCartItemId(effectiveUpgrade.itemId);
+            const matchingReq = requirements.find(r => normalizeCartItemId(r.itemId) === upgId);
+            if (matchingReq) {
+                const realStock = matchingReq.currentStock;
+                const effectiveStock = Math.max(0, realStock - matchingReq.totalNeeded);
+                const upgTotalCeil = Math.ceil(effectiveUpgrade.totalNeeded - 1e-9);
+                effectiveUpgrade.missing = Math.max(0, upgTotalCeil - effectiveStock);
+                effectiveUpgrade.missingRounded = effectiveUpgrade.missing;
+            } else {
+                const upgTotalCeil = Math.ceil(effectiveUpgrade.totalNeeded - 1e-9);
+                effectiveUpgrade.missing = Math.max(0, upgTotalCeil - effectiveUpgrade.currentStock);
+                effectiveUpgrade.missingRounded = effectiveUpgrade.missing;
+            }
+        }
+
+        const all = effectiveUpgrade ? [...requirements, effectiveUpgrade] : requirements;
+        const missingList = all.filter((x) => {
+            if (!x || x.missingRounded <= 0) return false;
+            if (x.itemId) return !isCoinItem(x.itemId);
+            return true;
+        });
+
+        return { actionCount, requirements, upgrade, upgradeMeta, totalMissingTypes: missingList.length, totalMissingQty: missingList.reduce((sum, row) => sum + row.missingRounded, 0), missingList, isCurrentAction: inCurrentAction, needManualCount, _recipeHrid: domRecipeHrid, _recipeName: _extractPanelTitle(modal) };
+    }
+
+    /**
+     * 从房屋建造面板提取缺料数据
+     * 房屋建造始终为单次操作，无升级物品。
+     */
+    function extractHouseRequirements(panel) {
+        const requirementsEl = panel.querySelector(SEL.houseRequirements);
+        if (!requirementsEl) {
+            return { actionCount: { value: 1, raw: "1", infinite: false }, requirements: [], upgrade: null, totalMissingTypes: 0, totalMissingQty: 0, missingList: [], isCurrentAction: false, needManualCount: false, isHousePanel: true };
+        }
+        const actionCount = { value: 1, raw: "1", infinite: false };
+        const requirementItems = [...requirementsEl.querySelectorAll(`:scope > ${SEL.requirementItems}`)];
+        const inventoryEls = [...requirementsEl.querySelectorAll(`:scope > ${SEL.houseInventory}`)];
+        const inputEls = [...requirementsEl.querySelectorAll(`:scope > ${SEL.houseInput}`)];
+
+        const requirements = requirementItems.map((itemWrap, index) => {
+            const itemCore = itemWrap.querySelector(SEL.itemCore) || itemWrap;
+            const itemHref = extractIconRef(itemCore) || extractUseHref(itemCore);
+            const itemId = isLikelyItemRef(itemHref) ? normalizeItemId(itemHref) : "";
+            const name = getItemName(itemCore, itemId);
+            const inventoryEl = inventoryEls[index] || null;
+            const inputEl = inputEls[index] || null;
+            const inventoryText = textWithoutInjected(inventoryEl) || "0";
+            const inputText = textWithoutInjected(inputEl) || "0";
+
+            let currentStock;
+            if (_wsInventory.ready && itemId) currentStock = _wsInventory.getCount(itemId);
+            else currentStock = parseInventoryValue(inventoryText);
+            const needPerAction = parseRequiredPerAction(inputText);
+            const totalNeeded = needPerAction;
+            const totalNeededCeil = Math.ceil(totalNeeded - 1e-9);
+            const missing = Math.max(0, totalNeededCeil - currentStock);
+
+            return { type: "material", index, itemId, name, currentStock, needPerAction, totalNeeded, missing, missingRounded: missing, canAddToCart: Boolean(itemId), iconRef: itemHref || "", itemWrap, inventoryEl, inputEl };
+        });
+
+        const missingList = requirements.filter((x) => {
+            if (!x || x.missingRounded <= 0) return false;
+            if (x.itemId) return !isCoinItem(x.itemId);
+            return true;
+        });
+
+        return { actionCount, requirements, upgrade: null, upgradeMeta: null, totalMissingTypes: missingList.length, totalMissingQty: missingList.reduce((sum, row) => sum + row.missingRounded, 0), missingList, isCurrentAction: false, needManualCount: false, isHousePanel: true };
+    }
+
+    // ── 渲染逻辑 ──────────────────────────────────────────────────
+
+    /** 生成数据签名（用于判断是否需要重绘） */
+    function buildDataSignature(data) {
+        if (!data) return "";
+        const base = [`ac:${formatQty(data.actionCount?.value || 1)}`, `inf:${data.actionCount?.infinite ? 1 : 0}`, `ca:${data.isCurrentAction ? 1 : 0}`, `mc:${formatQty(STATE.manualActionCount)}`, `iu:${STATE.includeUpgrade ? 1 : 0}`, `dl:${data._dataLayerUsed ? 1 : 0}`, `pl:${STATE.craftingPlansEnabled ? STATE.craftingPlans.size : 0}`, `zi:${STATE.zScoreIndex}`, `gl:${STATE.guzzlingPouchLevel}`];
+        const mats = (data.requirements || []).map((row) => [row.itemId || row.name || "", formatQty(row.currentStock || 0), formatQty(row.needPerAction || 0), formatQty(row.missingRounded || 0)].join(":"));
+        base.push(`m:${mats.join("|")}`);
+        if (data.upgrade) base.push(["u", data.upgrade.itemId || data.upgrade.name || "", formatQty(data.upgrade.currentStock || 0), formatQty(data.upgrade.needPerAction || 0), formatQty(data.upgrade.missingRounded || 0)].join(":"));
+        else base.push("u:none");
+        return base.join(";");
+    }
+
+    /** 清除弹窗中所有插件注入的徽章标记 */
+    function clearInlineBadges(modal) {
+        if (!modal) return;
+        withObserverSuppressed(() => {
+            modal.querySelectorAll("[data-mm-badge]").forEach((el) => { el.removeAttribute("data-mm-badge"); el.removeAttribute("data-mm-badge-type"); });
+            modal.querySelectorAll(".mwi-mm-upgrade-badge, .mwi-mm-upgrade-inline").forEach((el) => el.remove());
+        });
+    }
+
+    /** 在技能面板材料行上渲染缺料徽章（如「缺12」「✓」） */
+    function renderInlineBadges(modal, data) {
+        withObserverSuppressed(() => {
+            const activeEls = new Set();
+            const zActive = _zScoreCalc.getActiveZ() > 0 && data._artisanBuff > 0;
+            for (const row of data.requirements) {
+                if (!row.inputEl) continue;
+                // v1.4.3: Z-score 激活时，badge 显示 「缺 expected⁺margin」 格式
+                let badgeText;
+                if (zActive && row._zMargin > 0) {
+                    const missingBase = Math.max(0, row._zExpected - row.currentStock);
+                    badgeText = ` ${t("shortage_n", formatQty(missingBase))}⁺${formatQty(row._zMargin)}`;
+                } else {
+                    badgeText = ` ${t("shortage_n", formatQty(row.missingRounded))}`;
+                }
+                const badgeType = row.missingRounded > 0 ? "missing" : "ok";
+                if (row.inputEl.getAttribute("data-mm-badge") !== badgeText) row.inputEl.setAttribute("data-mm-badge", badgeText);
+                if (row.inputEl.getAttribute("data-mm-badge-type") !== badgeType) row.inputEl.setAttribute("data-mm-badge-type", badgeType);
+                // hover 保留完整公式说明
+                if (zActive && row._zMargin > 0) {
+                    const hoverText = t("zscore_hover", row._zExpected, row._zMargin, row._zTotal);
+                    if (row.inputEl.getAttribute("title") !== hoverText) row.inputEl.setAttribute("title", hoverText);
+                } else {
+                    if (row.inputEl.hasAttribute("title")) row.inputEl.removeAttribute("title");
+                }
+                activeEls.add(row.inputEl);
+            }
+            if (data.upgrade && STATE.includeUpgrade) {
+                const container = data.upgrade.container || data.upgrade.countEl?.closest(SEL.upgradeContainer) || modal.querySelector(SEL.upgradeContainer);
+                if (container) {
+                    const newText = t("shortage_n", formatQty(data.upgrade.missingRounded));
+                    const isMissing = data.upgrade.missingRounded > 0;
+                    let inline = container.querySelector(".mwi-mm-upgrade-inline");
+                    if (!inline) {
+                        inline = document.createElement("div");
+                        inline.className = "mwi-mm-upgrade-inline";
+                        const warning = container.querySelector('[class*="SkillActionDetail_warning"]');
+                        if (warning && warning.parentElement === container) container.insertBefore(inline, warning);
+                        else container.appendChild(inline);
+                    }
+                    if (inline.textContent !== newText) inline.textContent = newText;
+                    const hasMissing = inline.classList.contains("is-missing");
+                    if (hasMissing !== isMissing) { inline.classList.toggle("is-missing", isMissing); inline.classList.toggle("is-ok", !isMissing); }
+                    activeEls.add(inline);
+                }
+            }
+            modal.querySelectorAll("[data-mm-badge]").forEach((el) => { if (!activeEls.has(el)) { el.removeAttribute("data-mm-badge"); el.removeAttribute("data-mm-badge-type"); } });
+            modal.querySelectorAll(".mwi-mm-upgrade-inline").forEach((el) => { if (!activeEls.has(el)) el.remove(); });
+
+            // v1.4.3: 清理旧的展开按钮（已改为自动链树）
+            modal.querySelectorAll(".mwi-mm-chain-btn").forEach(el => el.remove());
+        });
+    }
+
+    /**
+     * v1.4.3: 渲染配方链子树行（table 布局 + 展开/收起）
+     */
+    function renderChainSubRows(panel, data) {
+        let container = panel.querySelector(".mwi-mm-chain-tree");
+        if (!data._isUpgradeChainRecipe || !data._outputItemHrid) {
+            if (container) container.remove();
+            return;
+        }
+        if (!container) {
+            container = document.createElement("div");
+            container.className = "mwi-mm-chain-tree";
+            const buttonsEl = panel.querySelector(".mwi-mm-summary-buttons");
+            if (buttonsEl) panel.insertBefore(container, buttonsEl);
+            else panel.appendChild(container);
+            // 展开/收起按钮事件委托
+            container.addEventListener("click", (e) => {
+                const toggle = e.target.closest(".mwi-mm-chain-toggle");
+                if (!toggle) return;
+                STATE.chainTreeOpen = !STATE.chainTreeOpen;
+                const body = container.querySelector(".mwi-mm-chain-body");
+                const arrow = container.querySelector(".mwi-mm-chain-arrow");
+                if (body) body.style.display = STATE.chainTreeOpen ? "" : "none";
+                if (arrow) arrow.textContent = STATE.chainTreeOpen ? "▼" : "▶";
+            });
+        }
+        const steps = _recipeChain.getChainSteps(data._outputItemHrid, data.actionCount?.value || 1);
+        if (!steps.length) { container.remove(); return; }
+        const arrow = STATE.chainTreeOpen ? "▼" : "▶";
+        const bodyDisplay = STATE.chainTreeOpen ? "" : "none";
+        let html = `<div class="mwi-mm-chain-title"><span>${t("chain_title", steps.length)}</span><button class="mwi-mm-chain-toggle"><span class="mwi-mm-chain-arrow">${arrow}</span></button></div>`;
+        html += `<table class="mwi-mm-chain-body" style="display:${bodyDisplay}">`;
+        for (let i = 0; i < steps.length; i++) {
+            const step = steps[i];
+            const isFirst = i === 0;
+            const isLast = !step.upgradeFromHrid;
+            const stepLabel = isFirst ? t("chain_current") : (isLast ? t("chain_tail") : t("chain_step_from"));
+            html += `<tr class="mwi-mm-chain-step-head"><td colspan="3">${escapeHtml(step.stepName)} <span class="mwi-mm-chain-upgrade">${stepLabel}</span> ×${step.craftRuns}</td></tr>`;
+            for (const mat of step.materials) {
+                const bareId = mat.hrid.replace(/^\/items\//, "");
+                const stock = getEffectiveInventory(bareId, data._recipeHrid);
+                const missing = Math.max(0, mat.qty - stock);
+                const cls = missing > 0 ? "is-missing" : "is-ok";
+                html += `<tr class="mwi-mm-chain-row ${cls}"><td class="mwi-mm-chain-name">${escapeHtml(mat.name)}</td>` +
+                    `<td class="mwi-mm-chain-qty">${formatQty(mat.qty)}</td>` +
+                    `<td class="mwi-mm-chain-stock">(${t("shortage_n", formatQty(missing))})</td></tr>`;
+            }
+        }
+        html += `</table>`;
+        container.innerHTML = html;
+    }
+
+    /** 确保弹窗底部存在摘要面板容器（不存在则创建） */
+    function ensureSummaryPanel(modal) {
+        let panel = modal.querySelector(".mwi-mm-summary-panel");
+        if (panel) return panel;
+        panel = document.createElement("div");
+        panel.className = "mwi-mm-summary-panel";
+        const actionContainer = modal.querySelector(SEL.actionContainer);
+        if (actionContainer?.parentElement) actionContainer.parentElement.insertBefore(panel, actionContainer);
+        else {
+            const upgradeBtn = modal.querySelector(SEL.houseUpgradeBtn);
+            if (upgradeBtn?.parentElement) upgradeBtn.parentElement.insertBefore(panel, upgradeBtn);
+            else { const costsEl = modal.querySelector(SEL.houseCosts); if (costsEl?.nextSibling) costsEl.parentElement.insertBefore(panel, costsEl.nextSibling); else modal.appendChild(panel); }
+        }
+        return panel;
+    }
+
+    /** 从游戏 DOM 中探测按钮 CSS 类名（用于保持风格一致） */
+    function detectGameButtonClass() {
+        const btn = document.querySelector('button[class*="Button_button"]');
+        if (!btn) return "";
+        return [...btn.classList].filter((c) => c.startsWith("Button_button") || c.startsWith("Button_fullWidth")).join(" ");
+    }
+
+    /** 生成摘要面板的结构 key（用于判断是否需要重建 DOM） */
+    function buildSummaryStructureKey(data) {
+        return [`manual:${data.needManualCount ? 1 : 0}`, `iu:${STATE.includeUpgrade ? 1 : 0}`, `mt:${data.totalMissingTypes}`, `mq:${formatQty(data.totalMissingQty)}`, `plan:${!STATE.craftingPlansEnabled ? "off" : data._recipeHrid ? (STATE.craftingPlans.has(data._recipeHrid) ? "y" : "n") : "?"}`, `zi:${STATE.zScoreIndex}`].join("##");
+    }
+
+    /** 渲染弹窗底部的摘要面板（显示缺料统计 + 「加入购物清单」按钮） */
+    function renderSummaryPanel(modal, data) {
+        const panel = ensureSummaryPanel(modal);
+        const structKey = buildSummaryStructureKey(data);
+        const prevStructKey = panel.dataset.structKey || "";
+        if (structKey === prevStructKey) {
+            withObserverSuppressed(() => {
+                const statEl = panel.querySelector(".mwi-mm-summary-head .stat");
+                if (statEl) { const newStat = data.totalMissingTypes > 0 ? t("summary_missing", data.totalMissingTypes, formatQty(data.totalMissingQty)) : t("summary_sufficient"); if (statEl.textContent !== newStat) statEl.textContent = newStat; }
+                const manualInput = panel.querySelector(".mwi-mm-manual-input");
+                if (manualInput && document.activeElement !== manualInput) { const newVal = String(Math.max(1, STATE.manualActionCount)); if (manualInput.value !== newVal) manualInput.value = newVal; }
+            });
+            panel._latestData = data; return;
+        }
+
+        const gameBtnCls = detectGameButtonClass();
+        const statText = data.totalMissingTypes > 0 ? t("summary_missing", data.totalMissingTypes, formatQty(data.totalMissingQty)) : t("summary_sufficient");
+        const zLabel = _zScoreCalc.getActiveZ() > 0 ? ` · ${t("zscore_tag", Z_OPTIONS[STATE.zScoreIndex].label)}` : "";
+        const sourceTag = data._dataLayerUsed
+            ? ` <span style="font-size:9px;color:rgba(99,140,255,0.6);margin-left:4px;">${t("data_layer_tag")}${data._artisanBuff > 0 ? ` · ${t("artisan_tag", (data._artisanBuff * 100).toFixed(1))}${zLabel}` : ""}</span>`
+            : '';
+        const hasPlan = STATE.craftingPlansEnabled && data._recipeHrid && STATE.craftingPlans.has(data._recipeHrid);
+        const planTag = hasPlan ? ` <span style="font-size:9px;color:rgba(96,165,250,0.7);margin-left:4px;display:inline-flex;align-items:center;gap:2px;vertical-align:middle;"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>${t("has_plan_tag")}</span>` : '';
+        const manualCountHtml = data.needManualCount ? `<div class="mwi-mm-manual-count-row"><label class="mwi-mm-manual-label">${t("plan_count_label")}</label><input type="text" inputmode="numeric" pattern="[0-9]*" min="1" step="1" value="${Math.max(1, STATE.manualActionCount)}" class="mwi-mm-manual-input" /></div>` : "";
+
+        withObserverSuppressed(() => {
+            const prevInput = panel.querySelector(".mwi-mm-manual-input");
+            if (prevInput && document.activeElement === prevInput) { STATE._manualInputFocused = true; STATE._manualInputSelStart = prevInput.selectionStart; STATE._manualInputSelEnd = prevInput.selectionEnd; }
+            const hasCraftable = data._dataLayerUsed && data._isUpgradeChainRecipe;
+            const chainBtn = hasCraftable ? `<button data-act="add-chain" class="${escapeHtml(gameBtnCls)}">${t("add_chain")}</button>` : "";
+            panel.innerHTML = `<div class="mwi-mm-summary-head"><div class="stat">${escapeHtml(statText)}${sourceTag}${planTag}</div></div>${manualCountHtml}<div class="mwi-mm-summary-buttons"><button data-act="add" class="${escapeHtml(gameBtnCls)}">${t("add_to_cart")}</button>${chainBtn}</div>`;
+        });
+
+        panel.dataset.structKey = structKey;
+        panel._latestData = data;
+
+        const manualInput = panel.querySelector(".mwi-mm-manual-input");
+        if (manualInput) {
+            let debounceTimer = null;
+            manualInput.addEventListener("input", () => {
+                const val = parseInt(manualInput.value, 10);
+                STATE.manualActionCount = (Number.isFinite(val) && val > 0) ? val : 1;
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => { STATE.lastDataSignature = ""; refreshNow(); }, 180);
+            });
+            manualInput.addEventListener("keydown", (e) => e.stopPropagation());
+            if (STATE._manualInputFocused) {
+                STATE._manualInputFocused = false; manualInput.focus();
+                try { manualInput.setSelectionRange(STATE._manualInputSelStart ?? manualInput.value.length, STATE._manualInputSelEnd ?? manualInput.value.length); } catch (e) { /* ignore */ }
+            }
+        }
+
+        panel.querySelector('button[data-act="add"]')?.addEventListener("click", () => {
+            const latestData = panel._latestData || data;
+            let addedQty = 0, addedTypes = 0;
+            const skipped = [];
+            for (const row of latestData.missingList) {
+                if (!row.itemId) { skipped.push(row.name || t("unknown_item")); continue; }
+                addToCart({ itemId: row.itemId, name: row.name, iconRef: row.iconRef || "", quantity: row.missingRounded, source: row.type });
+                addedQty += row.missingRounded; addedTypes += 1;
+            }
+            // ★ v1.3.5: 同时创建制作计划（仅在有缺料时且功能开启）
+            if (STATE.craftingPlansEnabled && latestData._recipeHrid && latestData.missingList.length > 0 && addedTypes > 0) {
+                const allItems = [...latestData.requirements];
+                if (latestData.upgrade && STATE.includeUpgrade) allItems.push(latestData.upgrade);
+                createOrUpdatePlan(latestData._recipeHrid, latestData._recipeName || latestData._recipeHrid, latestData.actionCount?.value || 1, allItems);
+            }
+            if (latestData.missingList.length === 0) showToast(t("toast_no_missing"), "info");
+            else if (addedTypes <= 0) showToast(t("toast_no_id"), "error");
+            else {
+                const msg = skipped.length ? t("toast_added_skipped", addedTypes, skipped.length) : t("toast_added", addedTypes, formatQty(addedQty));
+                showToast(msg, "success");
+            }
+            setAction(t("action_added_to_cart")); renderCart(); openCartDrawer();
+        });
+
+        // v1.4.3: 「加入全链材料」按钮 — 升级链全步骤叶子材料汇总
+        panel.querySelector('button[data-act="add-chain"]')?.addEventListener("click", () => {
+            const latestData = panel._latestData || data;
+            if (!latestData._dataLayerUsed || !latestData._outputItemHrid) return;
+            // 获取全链叶子材料（所有步骤的非升级材料汇总）
+            const leafMap = _recipeChain.getLeafMaterials(latestData._outputItemHrid, latestData.actionCount?.value || 1);
+            const cartItems = _recipeChain.toCartItems(leafMap, latestData._recipeHrid);
+            let addedQty = 0, addedTypes = 0;
+            for (const item of cartItems) {
+                addToCart({ itemId: item.itemId, name: item.name, iconRef: item.iconRef, quantity: item.missing, source: "material" });
+                addedQty += item.missing;
+                addedTypes += 1;
+            }
+            if (addedTypes > 0) {
+                showToast(t("toast_chain_added", addedTypes, formatQty(addedQty)), "success");
+            } else {
+                showToast(t("toast_no_missing"), "info");
+            }
+            setAction(t("action_added_to_cart")); renderCart(); openCartDrawer();
+        });
+    }
+
+    // ── 位置/尺寸管理 ──────────────────────────────────────────────
+    //   FAB（浮动按钮）、购物车面板的位置与尺寸的读取、保存、限制、应用。
+    //   所有位置数据持久化到 localStorage，页面刷新后恢复。
+
+    /** 从 localStorage 读取 FAB 按钮位置 */
+    function loadFabPosition() {
+        try {
+            const raw = localStorage.getItem(SCRIPT.fabPosKey);
+            if (!raw) return null;
+            const p = JSON.parse(raw);
+            const x = Number(p?.x), y = Number(p?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+            return { x, y };
+        } catch { return null; }
+    }
+
+    /** 保存 FAB 按钮位置到 localStorage */
+    function saveFabPosition(x, y) {
+        try {
+            localStorage.setItem(SCRIPT.fabPosKey, JSON.stringify({ x, y }));
+        } catch { /* ignore */ }
+    }
+
+    /** 将 FAB 位置约束在视口内（边距 8px） */
+    function clampFabPosition(x, y, tab) {
+        const r = tab.getBoundingClientRect();
+        const m = 8;
+        return {
+            x: Math.min(Math.max(m, window.innerWidth - r.width - m), Math.max(m, x)),
+            y: Math.min(Math.max(m, window.innerHeight - r.height - m), Math.max(m, y))
+        };
+    }
+
+    /** 设置 FAB 按钮的屏幕位置（自动 clamp） */
+    function applyFabPosition(tab, x, y) {
+        const p = clampFabPosition(x, y, tab);
+        tab.style.left = `${Math.round(p.x)}px`;
+        tab.style.top = `${Math.round(p.y)}px`;
+        tab.style.right = "auto";
+        tab.style.bottom = "auto";
+        return p;
+    }
+
+    /** 从 localStorage 读取购物车面板位置 */
+    function loadDrawerPosition() {
+        try {
+            const raw = localStorage.getItem(SCRIPT.drawerPosKey);
+            if (!raw) return null;
+            const p = JSON.parse(raw);
+            const x = Number(p?.x), y = Number(p?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+            return { x, y };
+        } catch { return null; }
+    }
+
+    /** 保存购物车面板位置到 localStorage */
+    function saveDrawerPosition(x, y) {
+        try {
+            localStorage.setItem(SCRIPT.drawerPosKey, JSON.stringify({ x, y }));
+        } catch { /* ignore */ }
+    }
+
+    /** 将购物车面板位置约束在视口内（边距 4px） */
+    function clampDrawerPosition(x, y, el) {
+        const r = el.getBoundingClientRect();
+        const w = r.width || 306;
+        const h = r.height || Math.round(window.innerHeight * 0.6);
+        const m = 4;
+        return {
+            x: Math.min(Math.max(m, window.innerWidth - w - m), Math.max(m, x)),
+            y: Math.min(Math.max(m, window.innerHeight - h - m), Math.max(m, y))
+        };
+    }
+
+    /** 设置购物车面板的屏幕位置（自动 clamp） */
+    function applyDrawerPosition(el, x, y) {
+        const p = clampDrawerPosition(x, y, el);
+        el.style.left = `${Math.round(p.x)}px`;
+        el.style.top = `${Math.round(p.y)}px`;
+        return p;
+    }
+
+    /** 从 localStorage 读取购物车面板尺寸 */
+    function loadDrawerSize() {
+        try {
+            const raw = localStorage.getItem(SCRIPT.drawerSizeKey);
+            if (!raw) return null;
+            const p = JSON.parse(raw);
+            const w = Number(p?.w), h = Number(p?.h);
+            if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
+            return { w, h };
+        } catch { return null; }
+    }
+
+    /** 保存购物车面板尺寸到 localStorage */
+    function saveDrawerSize(w, h) {
+        try {
+            localStorage.setItem(SCRIPT.drawerSizeKey, JSON.stringify({ w, h }));
+        } catch { /* ignore */ }
+    }
+
+    // 面板尺寸边界
+    const DRAWER_MIN_W = 220;
+    const DRAWER_MIN_H = 180;
+    const DRAWER_MAX_W_RATIO = 0.92;
+    const DRAWER_MAX_H_RATIO = 0.92;
+
+    /** 将面板尺寸约束在最小/最大范围内 */
+    function clampDrawerSize(w, h) {
+        return {
+            w: Math.min(Math.floor(window.innerWidth * DRAWER_MAX_W_RATIO), Math.max(DRAWER_MIN_W, Math.round(w))),
+            h: Math.min(Math.floor(window.innerHeight * DRAWER_MAX_H_RATIO), Math.max(DRAWER_MIN_H, Math.round(h)))
+        };
+    }
+
+    /** 应用面板尺寸（用于拖拽结束后的最终状态，height 留空以自适应） */
+    function applyDrawerSize(el, w, h) {
+        const s = clampDrawerSize(w, h);
+        el.style.width = `${s.w}px`;
+        el.style.height = "";
+        el.style.minHeight = "";
+        el.style.maxHeight = `${s.h}px`;
+        el.classList.add("has-custom-size");
+        return s;
+    }
+
+    /** 应用面板尺寸（拖拽过程中实时预览，height 固定） */
+    function applyDrawerSizeDrag(el, w, h) {
+        const s = clampDrawerSize(w, h);
+        el.style.width = `${s.w}px`;
+        el.style.height = `${s.h}px`;
+        el.style.minHeight = "";
+        el.style.maxHeight = `${s.h}px`;
+        return s;
+    }
+
+    /** 重置面板尺寸为默认自适应 */
+    function resetDrawerSize() {
+        try { localStorage.removeItem(SCRIPT.drawerSizeKey); } catch { /* ignore */ }
+        const d = STATE.ui.drawer;
+        if (!d) return;
+        d.style.width = "";
+        d.style.height = "";
+        d.style.minHeight = "";
+        d.style.maxHeight = "";
+        d.classList.remove("has-custom-size");
+        requestAnimationFrame(() => {
+            const r = d.getBoundingClientRect();
+            const p = applyDrawerPosition(d, r.left, r.top);
+            saveDrawerPosition(p.x, p.y);
+        });
+    }
+
+    // ── 购物车面板开关 ─────────────────────────────────────────────
+
+    /** 打开购物车抽屉面板 */
+    function openCartDrawer() {
+        if (!STATE.ui.drawer || !STATE.ui.tab) return;
+        STATE.cartNonEmptyOnOpen = [...STATE.cart.values()].some(r => r.quantity > 0);
+        STATE.plansCollapsed = false;
+        STATE.ui.drawer.style.display = "flex";
+        STATE.ui.tab.classList.add("is-open");
+        triggerInventorySync(30);
+        renderPlansUI();
+    }
+
+    /** 关闭购物车抽屉面板 */
+    function closeCartDrawer() {
+        if (!STATE.ui.drawer || !STATE.ui.tab) return;
+        if (STATE.pickMode) exitPickMode();
+        if (STATE.settingsPanelOpen) {
+            STATE.settingsPanelOpen = false;
+            syncSettingsPanelVisibility(STATE.ui.drawer);
+            const sb = STATE.ui.drawer.querySelector('[data-act="toggle-settings"]');
+            if (sb) sb.classList.remove("is-on");
+        }
+        STATE.ui.drawer.style.display = "none";
+        STATE.ui.tab.classList.remove("is-open");
+        if (_plansPanel) _plansPanel.style.display = "none";
+    }
+
+    /** 切换购物车抽屉面板的打开/关闭状态 */
+    function toggleCartDrawer() {
+        if (!STATE.ui.drawer) return;
+        if (STATE.ui.drawer.style.display === "flex") closeCartDrawer();
+        else openCartDrawer();
+    }
+
+    /** 同步设置面板可见性（显示设置时隐藏搜索和列表，反之亦然） */
+    function syncSettingsPanelVisibility(drawer) {
+        if (!drawer) return;
+        const sp = drawer.querySelector(".mwi-mm-settings-panel");
+        const sr = drawer.querySelector(".mwi-mm-cart-search-row");
+        const cl = drawer.querySelector(".mwi-mm-cart-list");
+        const qp = drawer.querySelector(".mwi-mm-quest-panel");
+        if (sp) sp.style.display = STATE.settingsPanelOpen ? "flex" : "none";
+        if (sr) sr.style.display = STATE.settingsPanelOpen ? "none" : "";
+        if (cl) cl.style.display = STATE.settingsPanelOpen ? "none" : "";
+        if (qp) qp.style.display = STATE.settingsPanelOpen ? "none" : (STATE.questPanelVisible && STATE.questPanelEnabled ? "block" : "none");
+    }
+
+    // ── 从背包添加模式 ──────────────────────────────────────────────
+    let _pickClickHandler = null;
+
+    function enterPickMode() {
+        STATE.pickMode = true; STATE.pickedItems.clear(); document.body.classList.add("mwi-mm-pick-mode");
+        const btn = STATE.ui.drawer?.querySelector('[data-act="pick-from-inventory"]');
+        if (btn) { btn.textContent = t("confirm_pick"); btn.classList.add("is-picking"); }
+        showPickStatusBar();
+        _pickClickHandler = (event) => {
+            const target = event.target; if (!(target instanceof Element)) return;
+            if (target.closest("#mwi-mm-cart-drawer") || target.closest("#mwi-mm-cart-tab") || target.closest(".mwi-mm-pick-modal")) return;
+            const itemContainer = target.closest('[class*="Item_itemContainer"]'); if (!itemContainer) return;
+            const invPanel = itemContainer.closest('[class*="Inventory_inventory"]'); if (!invPanel) return;
+            event.preventDefault(); event.stopPropagation(); togglePickItem(itemContainer);
+        };
+        document.addEventListener("click", _pickClickHandler, true);
+        showToast(t("toast_pick_hint"), "info");
+    }
+
+    /** 退出背包拾取模式（清理事件监听和选中标记） */
+    function exitPickMode() {
+        STATE.pickMode = false; STATE.pickedItems.clear(); document.body.classList.remove("mwi-mm-pick-mode");
+        const btn = STATE.ui.drawer?.querySelector('[data-act="pick-from-inventory"]');
+        if (btn) { btn.textContent = t("pick_from_inv"); btn.classList.remove("is-picking"); }
+        if (_pickClickHandler) { document.removeEventListener("click", _pickClickHandler, true); _pickClickHandler = null; }
+        document.querySelectorAll(".mwi-mm-pick-selected").forEach((el) => el.classList.remove("mwi-mm-pick-selected"));
+        removePickStatusBar(); closePickConfirmModal();
+    }
+
+    /** 切换背包物品的选中状态 */
+    function togglePickItem(itemContainer) {
+        const itemCore = itemContainer.querySelector(SEL.itemCore) || itemContainer;
+        const href = extractIconRef(itemCore) || extractUseHref(itemCore);
+        const itemId = isLikelyItemRef(href) ? normalizeItemId(href) : "";
+        if (!itemId) { showToast(t("toast_unrecognized"), "error"); return; }
+        if (STATE.pickedItems.has(itemId)) { STATE.pickedItems.delete(itemId); itemContainer.classList.remove("mwi-mm-pick-selected"); }
+        else { STATE.pickedItems.set(itemId, { itemId, name: getItemName(itemCore, itemId), iconRef: href || "", quantity: 1 }); itemContainer.classList.add("mwi-mm-pick-selected"); }
+        updatePickStatusBar();
+    }
+
+    /** 显示拾取模式状态栏 */
+    function showPickStatusBar() {
+        removePickStatusBar();
+        const bar = document.createElement("div"); bar.className = "mwi-mm-pick-status-bar";
+        bar.innerHTML = `<span class="mwi-mm-pick-status-text">${t("pick_selected", 0)}</span><button class="mwi-mm-pick-cancel-btn" data-act="pick-cancel">${t("pick_cancel")}</button>`;
+        bar.querySelector('[data-act="pick-cancel"]').addEventListener("click", () => exitPickMode());
+        document.body.appendChild(bar);
+    }
+    /** 更新拾取状态栏的已选数量 */
+    function updatePickStatusBar() { const bar = document.querySelector(".mwi-mm-pick-status-bar"); if (!bar) return; const s = bar.querySelector("strong"); if (s) s.textContent = String(STATE.pickedItems.size); }
+    /** 移除拾取状态栏 */
+    function removePickStatusBar() { document.querySelectorAll(".mwi-mm-pick-status-bar").forEach((el) => el.remove()); }
+
+    /** 显示拾取确认弹窗（可修改数量） */
+    function showPickConfirmModal() {
+        if (STATE.pickedItems.size === 0) { showToast(t("toast_no_pick"), "info"); return; }
+        closePickConfirmModal();
+        const modal = document.createElement("div"); modal.className = "mwi-mm-pick-modal";
+        const items = [...STATE.pickedItems.values()];
+        const rows = items.map((item) => `<div class="mwi-mm-pick-row" data-item-id="${escapeHtml(item.itemId)}"><div class="mwi-mm-pick-row-icon">${renderItemIconSvg(item)}</div><div class="mwi-mm-pick-row-name">${escapeHtml(item.name)}</div><input type="text" inputmode="numeric" class="mwi-mm-pick-qty" value="1" data-item-id="${escapeHtml(item.itemId)}" /><button class="mwi-mm-pick-remove" data-item-id="${escapeHtml(item.itemId)}">✕</button></div>`).join("");
+        modal.innerHTML = `<div class="mwi-mm-pick-modal-backdrop"></div><div class="mwi-mm-pick-modal-content"><div class="mwi-mm-pick-modal-head"><div class="title">${t("pick_confirm_title")}</div><div class="subtitle">${t("pick_subtitle", items.length)}</div></div><div class="mwi-mm-pick-modal-list">${rows}</div><div class="mwi-mm-pick-modal-foot"><button class="mwi-mm-pick-confirm-btn" data-act="pick-confirm">${t("pick_confirm_btn")}</button><button class="mwi-mm-pick-back-btn" data-act="pick-back">${t("pick_back_btn")}</button><button class="mwi-mm-pick-cancel-btn" data-act="pick-cancel-all">${t("cancel")}</button></div></div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('[data-act="pick-confirm"]').addEventListener("click", () => confirmPickedItems(modal));
+        modal.querySelector('[data-act="pick-back"]').addEventListener("click", () => closePickConfirmModal());
+        modal.querySelector('[data-act="pick-cancel-all"]').addEventListener("click", () => exitPickMode());
+        modal.querySelector(".mwi-mm-pick-modal-backdrop").addEventListener("click", () => closePickConfirmModal());
+        modal.querySelectorAll(".mwi-mm-pick-remove").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const id = btn.getAttribute("data-item-id"); if (!id) return;
+                STATE.pickedItems.delete(id);
+                modal.querySelector(`.mwi-mm-pick-row[data-item-id="${id}"]`)?.remove();
+                document.querySelectorAll(".mwi-mm-pick-selected").forEach((el) => { const core = el.querySelector(SEL.itemCore) || el; const href = extractIconRef(core) || extractUseHref(core); const elId = isLikelyItemRef(href) ? normalizeItemId(href) : ""; if (elId === id) el.classList.remove("mwi-mm-pick-selected"); });
+                const subtitle = modal.querySelector(".subtitle"); if (subtitle) subtitle.textContent = t("pick_subtitle", STATE.pickedItems.size);
+                updatePickStatusBar(); if (STATE.pickedItems.size === 0) closePickConfirmModal();
+            });
+        });
+        modal.querySelectorAll(".mwi-mm-pick-qty").forEach((input) => input.addEventListener("keydown", (e) => e.stopPropagation()));
+    }
+    /** 关闭拾取确认弹窗 */
+    function closePickConfirmModal() { document.querySelectorAll(".mwi-mm-pick-modal").forEach((el) => el.remove()); }
+
+    /** 确认拾取选择，将已选物品添加到购物车 */
+    function confirmPickedItems(modal) {
+        let addedCount = 0;
+        for (const input of modal.querySelectorAll(".mwi-mm-pick-qty")) {
+            const id = input.getAttribute("data-item-id");
+            const qty = parseInt(input.value, 10);
+            if (!id || !Number.isFinite(qty) || qty <= 0) continue;
+            const item = STATE.pickedItems.get(id); if (!item) continue;
+            addToCart({ itemId: item.itemId, name: item.name, iconRef: item.iconRef, quantity: qty, source: "inventory-pick" });
+            addedCount++;
+        }
+        exitPickMode();
+        if (addedCount > 0) { showToast(t("toast_picked_n", addedCount), "success"); openCartDrawer(); }
+    }
+
+    // ── v1.3.5: 制作计划独立侧面板 ──────────────────────────────
+
+    let _plansPanel = null;  // 制作计划侧面板 DOM
+
+    /** 确保制作计划侧面板存在（不存在则创建，含拖拽和事件绑定） */
+    function _ensurePlansPanel() {
+        if (_plansPanel && document.body.contains(_plansPanel)) return _plansPanel;
+        const panel = document.createElement("aside");
+        panel.id = "mwi-mm-plans-panel";
+        panel.innerHTML = `<div class="mwi-mm-plans-head"><span class="mwi-mm-plans-title"><svg class="mwi-mm-plans-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>${t("crafting_plans")} <span class="mwi-mm-plans-count">(0)</span></span><div class="mwi-mm-plans-head-ops"><button data-act="clear-all-plans" class="mwi-mm-plans-clear-btn" title="${t("plan_clear_all")}">${t("plan_clear_all")}</button><button data-act="close-plans" class="mwi-mm-plans-close-btn" title="${t("collapse")}">✕</button></div></div><div class="mwi-mm-plans-list"></div>`;
+        document.body.appendChild(panel);
+
+        // 拖曳支持 — 制作计划面板独立拖曳
+        const plansHead = panel.querySelector(".mwi-mm-plans-head");
+        let plansDragState = null;
+        const finishPlansDrag = (ev) => {
+            if (!plansDragState || ev.pointerId !== plansDragState.pointerId) return;
+            if (plansHead.hasPointerCapture(ev.pointerId)) plansHead.releasePointerCapture(ev.pointerId);
+            const r = panel.getBoundingClientRect();
+            const pos = _applyPlansPanelPosition(panel, r.left, r.top);
+            savePlansPanelPosition(pos.x, pos.y);
+            plansDragState = null;
+        };
+        plansHead.style.cursor = "grab";
+        plansHead.style.touchAction = "none";
+        plansHead.style.userSelect = "none";
+        plansHead.addEventListener("pointerdown", (ev) => {
+            if (ev.target.closest("button, input, [data-act]") || ev.button !== 0) return;
+            const r = panel.getBoundingClientRect();
+            plansDragState = { pointerId: ev.pointerId, startX: ev.clientX, startY: ev.clientY, originX: r.left, originY: r.top };
+            plansHead.setPointerCapture(ev.pointerId);
+            plansHead.style.cursor = "grabbing";
+            ev.preventDefault();
+        });
+        plansHead.addEventListener("pointermove", (ev) => {
+            if (!plansDragState || ev.pointerId !== plansDragState.pointerId) return;
+            _applyPlansPanelPosition(panel,
+                plansDragState.originX + (ev.clientX - plansDragState.startX),
+                plansDragState.originY + (ev.clientY - plansDragState.startY));
+            ev.preventDefault();
+        });
+        plansHead.addEventListener("pointerup", (ev) => { finishPlansDrag(ev); plansHead.style.cursor = "grab"; });
+        plansHead.addEventListener("pointercancel", (ev) => { finishPlansDrag(ev); plansHead.style.cursor = "grab"; });
+
+        // 独立的事件处理 — 不依赖 drawer 的 click delegation
+        panel.addEventListener("click", (e) => {
+            const target = e.target;
+            if (!(target instanceof Element)) return;
+
+            // 清空全部计划
+            if (target.closest('[data-act="clear-all-plans"]')) {
+                clearAllPlans();
+                showToast(t("toast_plans_cleared"), "info");
+                return;
+            }
+            // 关闭面板
+            if (target.closest('[data-act="close-plans"]')) {
+                STATE.plansCollapsed = true;
+                renderPlansUI();
+                return;
+            }
+            // 移除单个计划
+            const removeBtn = target.closest('[data-act="remove-plan"]');
+            if (removeBtn) {
+                const hrid = removeBtn.getAttribute("data-plan-hrid");
+                if (hrid) {
+                    removePlan(hrid);
+                    showToast(t("toast_plan_removed"), "info");
+                }
+                return;
+            }
+        });
+
+        // 制作次数输入
+        panel.addEventListener("focusout", (e) => {
+            const t = e.target;
+            if (!(t instanceof HTMLInputElement) || !t.classList.contains("mwi-mm-plan-count-input")) return;
+            const hrid = t.getAttribute("data-plan-hrid") || "";
+            const val = parseInt(t.value, 10);
+            if (hrid && Number.isFinite(val) && val > 0) updatePlanCraftCount(hrid, val);
+            else renderPlansUI(); // 无效值则恢复
+        });
+        panel.addEventListener("keydown", (e) => {
+            const t = e.target;
+            if (!(t instanceof HTMLInputElement) || !t.classList.contains("mwi-mm-plan-count-input")) return;
+            e.stopPropagation();
+            if (e.key === "Enter") t.blur();
+            if (e.key === "Escape") { renderPlansUI(); }
+        });
+
+        _plansPanel = panel;
+        return panel;
+    }
+
+    // ── 制作计划面板位置管理（独立于购物车）──────────────────
+    /** 从 localStorage 读取计划面板位置 */
+    function loadPlansPanelPosition() {
+        try {
+            const raw = localStorage.getItem(SCRIPT.plansPosKey);
+            if (!raw) return null;
+            const p = JSON.parse(raw);
+            const x = Number(p?.x), y = Number(p?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+            return { x, y };
+        } catch { return null; }
+    }
+    /** 保存计划面板位置 */
+    function savePlansPanelPosition(x, y) {
+        try { localStorage.setItem(SCRIPT.plansPosKey, JSON.stringify({ x, y })); } catch { /* ignore */ }
+    }
+    /** 获取计划面板的默认位置（购物车面板右侧） */
+    function _getDefaultPlansPanelPosition() {
+        if (STATE.ui.drawer) {
+            const rect = STATE.ui.drawer.getBoundingClientRect();
+            const gap = 6;
+            const pw = 260;
+            let px = rect.right + gap;
+            if (px + pw > window.innerWidth - 4) px = Math.max(4, rect.left - pw - gap);
+            return { x: px, y: Math.max(4, rect.top) };
+        }
+        return { x: window.innerWidth - 280, y: Math.round(window.innerHeight * 0.08) };
+    }
+    /** 应用计划面板位置（自动 clamp） */
+    function _applyPlansPanelPosition(panel, x, y) {
+        const w = panel.offsetWidth || 260;
+        const h = panel.offsetHeight || 200;
+        const px = Math.min(Math.max(4, x), window.innerWidth - w - 4);
+        const py = Math.min(Math.max(4, y), window.innerHeight - h - 4);
+        panel.style.left = `${Math.round(px)}px`;
+        panel.style.top = `${Math.round(py)}px`;
+        return { x: px, y: py };
+    }
+    /** 初始化计划面板位置（优先加载保存的位置） */
+    function _initPlansPanelPosition(panel) {
+        const saved = loadPlansPanelPosition();
+        if (saved) {
+            _applyPlansPanelPosition(panel, saved.x, saved.y);
+        } else {
+            const def = _getDefaultPlansPanelPosition();
+            const pos = _applyPlansPanelPosition(panel, def.x, def.y);
+            savePlansPanelPosition(pos.x, pos.y);
+        }
+    }
+    /** 重置计划面板位置为默认 */
+    function resetPlansPanelPosition() {
+        try { localStorage.removeItem(SCRIPT.plansPosKey); } catch { /* ignore */ }
+        if (_plansPanel) {
+            const def = _getDefaultPlansPanelPosition();
+            const pos = _applyPlansPanelPosition(_plansPanel, def.x, def.y);
+            savePlansPanelPosition(pos.x, pos.y);
+        }
+    }
+
+    /** 更新购物车面板上的「制作计划」按钮状态 */
+    function _updatePlansToggleBtn() {
+        const btn = STATE.ui.drawer?.querySelector('[data-act="toggle-plans-panel"]');
+        if (!btn) return;
+        if (!STATE.craftingPlansEnabled) { btn.style.display = "none"; return; }
+        const count = [...STATE.craftingPlans.values()].filter(p => p.status !== "completed").length;
+        btn.innerHTML = count > 0 ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg> ${count}` : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>`;
+        btn.classList.toggle("is-on", count > 0 && !STATE.plansCollapsed);
+        btn.style.display = count > 0 ? "" : "none";
+    }
+
+    /** 渲染制作计划侧面板 UI（卡片列表 + 进度条 + 材料锁定） */
+    function renderPlansUI() {
+        const plans = [...STATE.craftingPlans.values()].filter(p => p.status !== "completed");
+        const drawerOpen = STATE.ui.drawer && STATE.ui.drawer.style.display === "flex";
+
+        _updatePlansToggleBtn();
+
+        // 无计划或功能关闭或购物车关闭或用户折叠 → 隐藏
+        if (!plans.length || !STATE.craftingPlansEnabled || !drawerOpen || STATE.plansCollapsed) {
+            if (_plansPanel) _plansPanel.style.display = "none";
+            return;
+        }
+
+        const panel = _ensurePlansPanel();
+        panel.style.display = "flex";
+
+        // 更新计数
+        const countEl = panel.querySelector(".mwi-mm-plans-count");
+        if (countEl) countEl.textContent = `(${plans.length})`;
+
+        // 渲染计划列表
+        const list = panel.querySelector(".mwi-mm-plans-list");
+        if (!list) return;
+
+        const now = Date.now();
+        let html = "";
+        for (const plan of plans) {
+            const isCrafting = plan.status === "crafting";
+            const statusCls = isCrafting ? "is-crafting" : "is-active";
+            const progressPct = Math.min(100, (plan.craftedCount / plan.craftCount) * 100);
+            const progressText = isCrafting
+                ? `<span class="mwi-mm-plan-progress-bar"><span class="mwi-mm-plan-progress-mask" style="width:${100 - progressPct}%"></span></span><span class="mwi-mm-plan-progress-text">${plan.craftedCount}/${plan.craftCount}</span>`
+                : `<span class="mwi-mm-plan-status-tag">${t("plan_waiting")}</span>`;
+            const ageMs = now - new Date(plan.createdAt).getTime();
+            const isStale = ageMs > 24 * 60 * 60 * 1000;
+
+            // 材料：每行一个，名称白色 + 数量黄色
+            const materialRows = Object.entries(plan.materials).map(([bareId, qty]) => {
+                const name = _dataLayer.ready ? (_dataLayer.hridToName(`/items/${bareId}`) || bareId) : bareId;
+                return `<div class="mwi-mm-plan-mat-row"><span class="mwi-mm-plan-mat-icon">🔒</span><span class="mwi-mm-plan-mat-name">${escapeHtml(name)}</span><span class="mwi-mm-plan-mat-qty">×${formatQty(qty)}</span></div>`;
+            }).join("");
+
+            html += `<div class="mwi-mm-plan-card ${statusCls}${isStale ? " is-stale" : ""}">
+                <div class="mwi-mm-plan-card-head">
+                    <div class="mwi-mm-plan-title-line">
+                        <span class="mwi-mm-plan-name">${escapeHtml(plan.recipeName)}</span>
+                        <span class="mwi-mm-plan-count-wrap">×<input type="text" inputmode="numeric" class="mwi-mm-plan-count-input" data-plan-hrid="${escapeHtml(plan.recipeHrid)}" value="${plan.craftCount}" /></span>
+                    </div>
+                    <button class="mwi-mm-plan-remove" data-act="remove-plan" data-plan-hrid="${escapeHtml(plan.recipeHrid)}" title="${t("plan_remove")}">✕</button>
+                </div>
+                <div class="mwi-mm-plan-progress">${progressText}</div>
+                <div class="mwi-mm-plan-lock-divider"><span class="mwi-mm-plan-lock-line"></span><span class="mwi-mm-plan-lock-label">${t("plan_inv_lock")}</span><span class="mwi-mm-plan-lock-line"></span></div>
+                <div class="mwi-mm-plan-mats">${materialRows}</div>
+                ${isStale ? `<div class="mwi-mm-plan-stale-hint">${t("plan_stale")}</div>` : ""}
+            </div>`;
+        }
+        list.innerHTML = html;
+
+        // 初始化位置（首次显示时或窗口变化后）
+        requestAnimationFrame(() => {
+            if (!_plansPanel.__posInited) {
+                _initPlansPanelPosition(panel);
+                _plansPanel.__posInited = true;
+            }
+        });
+    }
+
+    // ── ensureCartDrawer ──────────────────────────────────────────
+    //   创建购物车的 FAB 按钮和抽屉面板（只执行一次），
+    //   包含 HTML 结构、拖拽 / 缩放、搜索、click delegation 等事件绑定。
+
+    // ── v1.4.0: 语言切换时重建面板 ────────────────────────────
+    /** 切换语言后重建整个购物车面板（静态翻译文本需要重新渲染） */
+    function _rebuildDrawerForLang() {
+        const wasOpen = isDrawerOpen();
+        // 移除旧 DOM
+        if (STATE.ui.drawer) STATE.ui.drawer.remove();
+        if (STATE.ui.tab) STATE.ui.tab.remove();
+        if (_plansPanel) { _plansPanel.remove(); _plansPanel = null; }
+        // 重置引用
+        STATE.ui.drawer = null;
+        STATE.ui.tab = null;
+        STATE.ui.cartList = null;
+        STATE.ui.body = null;
+        STATE.ui.count = null;
+        STATE.settingsPanelOpen = false;
+        // 重建
+        ensureCartDrawer();
+        showFab();
+        if (wasOpen) openCartDrawer();
+        // 强制刷新数据
+        STATE.lastDataSignature = "";
+        refreshNow();
+    }
+
+    /** 确保购物车抽屉面板已创建并初始化 */
+    function ensureCartDrawer() {
+        if (STATE.ui.drawer) return;
+
+        // ─ 创建 FAB 浮动按钮 ─────────────────────────────
+        const tab = document.createElement("button");
+        tab.id = "mwi-mm-cart-tab";
+        tab.type = "button";
+        tab.style.display = "none";
+        tab.setAttribute("aria-label", t("shopping_list"));
+        tab.innerHTML = `
+            <svg class="mwi-mm-fab-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="9" cy="19.5" r="1.5"></circle>
+                <circle cx="17.2" cy="19.5" r="1.5"></circle>
+                <path d="M3 4h2l2 10.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 1.9-1.4L20 8.8H7.4"></path>
+            </svg>
+            <span class="mwi-mm-fab-badge">0</span>`;
+
+        // ─ 创建购物车抽屉面板 ────────────────────────────
+        const drawer = document.createElement("aside");
+        drawer.id = "mwi-mm-cart-drawer";
+        drawer.innerHTML = `
+            <div class="mwi-mm-cart-head">
+                <div class="title">${t("shopping_list")}</div>
+                <div class="ops">
+                    <button data-act="pick-from-inventory" class="pick-inv-btn">${t("pick_from_inv")}</button>
+                    <div class="mwi-mm-clear-group">
+                        <button data-act="clear" class="mwi-mm-clear-main">${t("clear")}</button>
+                        <button data-act="clear-dropdown" class="mwi-mm-clear-dd-toggle">
+                            <svg viewBox="0 0 12 12" width="10" height="10">
+                                <path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                        <div class="mwi-mm-clear-dropdown" style="display:none;">
+                            <button data-act="clear-non-starred">
+                                <div class="dd-label">${t("clear_non_starred")}</div>
+                                <div class="dd-desc">${t("keep_starred")}</div>
+                            </button>
+                            <div class="dd-divider"></div>
+                            <button data-act="clear-all" class="dd-danger">
+                                <div class="dd-label">${t("clear_all_warn")}</div>
+                                <div class="dd-desc">${t("incl_starred")}</div>
+                            </button>
+                        </div>
+                    </div>
+                    <button data-act="toggle-settings" class="settings-btn">${t("settings")}</button>
+                    <button data-act="toggle-plans-panel" class="plans-toggle-btn" title="${t("toggle_plans")}">
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                            <line x1="9" y1="12" x2="15" y2="12"/>
+                            <line x1="9" y1="16" x2="13" y2="16"/>
+                        </svg>
+                    </button>
+                    <button data-act="toggle-quest-panel" class="quest-toggle-btn" title="${t("quest_panel_title")}">
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                            <line x1="4" y1="22" x2="4" y2="15"/>
+                        </svg>
+                    </button>
+                    <button data-act="close" class="mwi-mm-close-btn" title="${t("collapse")}">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="mwi-mm-settings-panel" style="display:none;">
+                <div class="mwi-mm-settings-scroll">
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_lock_panel")}</div><div class="mwi-mm-settings-desc">${t("s_lock_panel_desc")}</div></div><button data-act="toggle-lock" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_market_locate")}</div><div class="mwi-mm-settings-desc">${t("s_market_locate_desc")}</div></div><button data-act="toggle-locate" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_incl_upgrade")}</div><div class="mwi-mm-settings-desc">${t("s_incl_upgrade_desc")}</div></div><button data-act="toggle-include-upgrade" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_inv_sync")}</div><div class="mwi-mm-settings-desc">${t("s_inv_sync_desc")}</div></div><button data-act="toggle-inventory-sync" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_auto_collapse")}</div><div class="mwi-mm-settings-desc">${t("s_auto_collapse_desc")}</div></div><button data-act="toggle-auto-collapse" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_auto_prefill")}</div><div class="mwi-mm-settings-desc">${t("s_auto_prefill_desc")}</div></div><button data-act="toggle-auto-prefill" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_purchase_nav")}</div><div class="mwi-mm-settings-desc">${t("s_purchase_nav_desc")}</div></div><button data-act="toggle-purchase-nav" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_crafting_plans")}</div><div class="mwi-mm-settings-desc">${t("s_crafting_plans_desc")}</div></div><button data-act="toggle-crafting-plans" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_quest_tracking")}</div><div class="mwi-mm-settings-desc">${t("s_quest_tracking_desc")}</div></div><button data-act="toggle-quest-tracking" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_zscore")}</div><div class="mwi-mm-settings-desc">${t("s_zscore_desc")}</div></div><select data-act="change-zscore" class="mwi-mm-select">${Z_OPTIONS.map((opt, i) => `<option value="${i}"${i === STATE.zScoreIndex ? " selected" : ""}>${i === 0 ? t("s_zscore_none") : opt.label}</option>`).join("")}</select></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_guzzling")}</div><div class="mwi-mm-settings-desc">${t("s_guzzling_desc")}</div></div><select data-act="change-guzzling" class="mwi-mm-select"><option value="-1"${STATE.guzzlingPouchLevel === -1 ? " selected" : ""}>${t("s_guzzling_auto")}</option>${Array.from({length: 21}, (_, i) => `<option value="${i}"${STATE.guzzlingPouchLevel === i ? " selected" : ""}>+${i}</option>`).join("")}</select></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_manual_sync")}</div><div class="mwi-mm-settings-desc">${t("s_manual_sync_desc")}</div></div><button data-act="manual-sync" class="mwi-mm-toggle-btn" style="font-size:12px">${t("s_manual_sync_btn")}</button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_reset_size")}</div><div class="mwi-mm-settings-desc">${t("s_reset_size_desc")}</div></div><button data-act="reset-size" class="mwi-mm-toggle-btn" style="font-size:12px">${t("s_reset_btn")}</button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_language")}</div><div class="mwi-mm-settings-desc">${t("s_language_desc")}</div></div><button data-act="toggle-lang" class="mwi-mm-toggle-btn" style="font-size:12px">${_currentLang === "zh" ? t("s_lang_zh") : t("s_lang_en")}</button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_data_source")}</div><div class="mwi-mm-settings-desc mwi-mm-ws-status">${_wsInventory.ready ? t("ws_status_ok", _wsInventory._detailMap?.size || 0) : t("ws_status_wait")} · ${_dataLayer.ready ? t("dl_status_ok", _dataLayer._outputToAction?.size || 0, "") : t("dl_status_wait")}</div></div></div>
+                </div>
+            </div>
+            <div class="mwi-mm-quest-panel" style="display:none;"></div>
+            <div class="mwi-mm-cart-search-row">
+                <input type="text" class="mwi-mm-cart-search" placeholder="${t("search_placeholder")}" />
+            </div>
+            <div class="mwi-mm-cart-list"></div>
+            <div class="mwi-mm-resize-handle" title="${t("resize_hint")}"></div>`;
+
+        // ─ 挂载到 DOM ────────────────────────────────────
+        document.body.appendChild(tab);
+        document.body.appendChild(drawer);
+        STATE.ui.tab = tab;
+        STATE.ui.mask = null;
+        STATE.ui.drawer = drawer;
+        STATE.ui.cartList = drawer.querySelector(".mwi-mm-cart-list");
+
+        // ─ 搜索栏：中文输入法兼容（compositionstart/end）──
+        const searchInput = drawer.querySelector(".mwi-mm-cart-search");
+        if (searchInput) {
+            let isComposing = false;
+            searchInput.addEventListener("compositionstart", () => {
+                isComposing = true;
+            });
+            searchInput.addEventListener("compositionend", () => {
+                isComposing = false;
+                STATE.cartSearchQuery = searchInput.value.trim().toLowerCase();
+                renderCart();
+            });
+            searchInput.addEventListener("input", () => {
+                if (isComposing) return;
+                STATE.cartSearchQuery = searchInput.value.trim().toLowerCase();
+                renderCart();
+            });
+            searchInput.addEventListener("keydown", (e) => e.stopPropagation());
+        }
+
+        // ─ 恢复面板尺寸和位置 ───────────────────────────
+        const savedSize = loadDrawerSize();
+        if (savedSize) applyDrawerSize(drawer, savedSize.w, savedSize.h);
+
+        const savedDrawerPos = loadDrawerPosition();
+        if (savedDrawerPos) applyDrawerPosition(drawer, savedDrawerPos.x, savedDrawerPos.y);
+        else applyDrawerPosition(drawer, window.innerWidth - 322, Math.round(window.innerHeight * 0.08));
+
+        const savedPos = loadFabPosition();
+        if (savedPos) applyFabPosition(tab, savedPos.x, savedPos.y);
+        else applyFabPosition(tab, window.innerWidth - 62, Math.max(12, Math.round(window.innerHeight * 0.42)));
+
+        // ─ FAB 按钮拖拽 ─────────────────────────────────
+        let ignoreClickUntil = 0;
+        let dragState = null;
+
+        const finishDrag = (event) => {
+            if (!dragState || event.pointerId !== dragState.pointerId) return;
+            const moved = dragState.moved;
+            if (tab.hasPointerCapture(event.pointerId)) tab.releasePointerCapture(event.pointerId);
+            const r = tab.getBoundingClientRect();
+            const p = applyFabPosition(tab, r.left, r.top);
+            saveFabPosition(p.x, p.y);
+            dragState = null;
+            if (moved) ignoreClickUntil = Date.now() + 220;
+        };
+
+        tab.addEventListener("pointerdown", (e) => {
+            if (e.button !== 0) return;
+            const r = tab.getBoundingClientRect();
+            dragState = {
+                pointerId: e.pointerId,
+                startX: e.clientX, startY: e.clientY,
+                originX: r.left, originY: r.top,
+                moved: false
+            };
+            tab.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+
+        tab.addEventListener("pointermove", (e) => {
+            if (!dragState || e.pointerId !== dragState.pointerId) return;
+            const dx = e.clientX - dragState.startX;
+            const dy = e.clientY - dragState.startY;
+            if (!dragState.moved && Math.abs(dx) + Math.abs(dy) >= 4) dragState.moved = true;
+            applyFabPosition(tab, dragState.originX + dx, dragState.originY + dy);
+            e.preventDefault();
+        });
+
+        tab.addEventListener("pointerup", finishDrag);
+        tab.addEventListener("pointercancel", finishDrag);
+
+        tab.addEventListener("click", () => {
+            if (Date.now() < ignoreClickUntil) return;
+            toggleCartDrawer();
+        });
+
+        // ─ 窗口大小变化时重新约束所有面板位置 ────────────
+        window.addEventListener("resize", () => {
+            if (tab.style.display !== "none") {
+                const r = tab.getBoundingClientRect();
+                const p = applyFabPosition(tab, r.left, r.top);
+                saveFabPosition(p.x, p.y);
+            }
+            if (STATE.ui.drawer?.style.display === "flex") {
+                const r = drawer.getBoundingClientRect();
+                const p = applyDrawerPosition(drawer, r.left, r.top);
+                saveDrawerPosition(p.x, p.y);
+            }
+            if (_plansPanel && _plansPanel.style.display === "flex") {
+                const r = _plansPanel.getBoundingClientRect();
+                const pos = _applyPlansPanelPosition(_plansPanel, r.left, r.top);
+                savePlansPanelPosition(pos.x, pos.y);
+            }
+        });
+
+        // ─ 购物车面板头部拖拽 ────────────────────────────
+        const drawerHead = drawer.querySelector(".mwi-mm-cart-head");
+        let drawerDragState = null;
+
+        const finishDrawerDrag = (e) => {
+            if (!drawerDragState || e.pointerId !== drawerDragState.pointerId) return;
+            if (drawerHead.hasPointerCapture(e.pointerId)) drawerHead.releasePointerCapture(e.pointerId);
+            const r = drawer.getBoundingClientRect();
+            const p = applyDrawerPosition(drawer, r.left, r.top);
+            saveDrawerPosition(p.x, p.y);
+            drawerDragState = null;
+        };
+
+        drawerHead.addEventListener("pointerdown", (e) => {
+            if (e.target.closest("button, [data-act]") || e.button !== 0) return;
+            const r = drawer.getBoundingClientRect();
+            drawerDragState = {
+                pointerId: e.pointerId,
+                startX: e.clientX, startY: e.clientY,
+                originX: r.left, originY: r.top
+            };
+            drawerHead.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+
+        drawerHead.addEventListener("pointermove", (e) => {
+            if (!drawerDragState || e.pointerId !== drawerDragState.pointerId) return;
+            applyDrawerPosition(drawer,
+                drawerDragState.originX + (e.clientX - drawerDragState.startX),
+                drawerDragState.originY + (e.clientY - drawerDragState.startY));
+            e.preventDefault();
+        });
+
+        drawerHead.addEventListener("pointerup", finishDrawerDrag);
+        drawerHead.addEventListener("pointercancel", finishDrawerDrag);
+
+        // ─ 右下角缩放手柄 ───────────────────────────────
+        const resizeHandle = drawer.querySelector(".mwi-mm-resize-handle");
+        let resizeDragState = null;
+
+        const finishResize = (e) => {
+            if (!resizeDragState || e.pointerId !== resizeDragState.pointerId) return;
+            if (resizeHandle.hasPointerCapture(e.pointerId)) resizeHandle.releasePointerCapture(e.pointerId);
+            drawer.classList.remove("is-resizing");
+            const r = drawer.getBoundingClientRect();
+            const s = applyDrawerSize(drawer, r.width, r.height);
+            saveDrawerSize(s.w, s.h);
+            const p = applyDrawerPosition(drawer, r.left, r.top);
+            saveDrawerPosition(p.x, p.y);
+            resizeDragState = null;
+        };
+
+        resizeHandle.addEventListener("pointerdown", (e) => {
+            if (e.button !== 0) return;
+            const r = drawer.getBoundingClientRect();
+            resizeDragState = {
+                pointerId: e.pointerId,
+                startX: e.clientX, startY: e.clientY,
+                originW: r.width, originH: r.height
+            };
+            resizeHandle.setPointerCapture(e.pointerId);
+            drawer.classList.add("is-resizing");
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        resizeHandle.addEventListener("pointermove", (e) => {
+            if (!resizeDragState || e.pointerId !== resizeDragState.pointerId) return;
+            applyDrawerSizeDrag(drawer,
+                resizeDragState.originW + (e.clientX - resizeDragState.startX),
+                resizeDragState.originH + (e.clientY - resizeDragState.startY));
+            e.preventDefault();
+        });
+
+        resizeHandle.addEventListener("pointerup", finishResize);
+        resizeHandle.addEventListener("pointercancel", finishResize);
+
+        // ─ 面板内 click delegation（按钮动作路由）────────
+        // v1.4.3: select 下拉框 change 事件（Z-score / Guzzling Pouch）
+        drawer.addEventListener("change", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const act = target.getAttribute("data-act");
+            if (act === "change-zscore") {
+                const idx = parseInt(target.value, 10);
+                if (idx >= 0 && idx < Z_OPTIONS.length) {
+                    STATE.zScoreIndex = idx;
+                    saveToggles();
+                    STATE.lastDataSignature = "";
+                    refreshNow();
+                    showToast(t("toast_zscore_changed", idx === 0 ? t("s_zscore_none") : Z_OPTIONS[idx].label), "info");
+                }
+                return;
+            }
+            if (act === "change-guzzling") {
+                const lvl = parseInt(target.value, 10);
+                if (lvl >= -1 && lvl <= 20) {
+                    STATE.guzzlingPouchLevel = lvl;
+                    saveToggles();
+                    STATE.lastDataSignature = "";
+                    refreshNow();
+                    showToast(t("toast_guzzling_changed", lvl === -1 ? t("s_guzzling_auto") : `+${lvl}`), "info");
+                }
+                return;
+            }
+        });
+
+        drawer.addEventListener("click", async (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const actionEl = target.closest("[data-act]");
+            if (!actionEl) return;
+            const act = actionEl.getAttribute("data-act");
+
+            // 关闭面板
+            if (act === "close") {
+                closeCartDrawer();
+                return;
+            }
+
+            // 清空（默认清空非收藏）
+            if (act === "clear" || act === "clear-non-starred") {
+                const sc = [...STATE.cart.values()].filter(r => r.starred).length;
+                const nsc = STATE.cart.size - sc;
+                if (nsc === 0 && sc > 0) {
+                    showToast(t("toast_all_starred"), "info");
+                } else {
+                    const removed = clearNonStarred();
+                    STATE.cartSearchQuery = "";
+                    const si = drawer.querySelector(".mwi-mm-cart-search");
+                    if (si) si.value = "";
+                    if (sc > 0) showToast(t("toast_cleared_kept", removed, sc), "info");
+                    else showToast(t("toast_cart_cleared"), "info");
+                    setAction(t("action_cleared_non"));
+                }
+                _closeClearDropdown(drawer);
+                return;
+            }
+
+            // 清空全部（含收藏）
+            if (act === "clear-all") {
+                clearCart();
+                STATE.cartSearchQuery = "";
+                const si = drawer.querySelector(".mwi-mm-cart-search");
+                if (si) si.value = "";
+                showToast(t("toast_cart_all_cleared"), "info");
+                setAction(t("action_cleared_all"));
+                _closeClearDropdown(drawer);
+                return;
+            }
+
+            // 清空按钮的下拉菜单
+            if (act === "clear-dropdown") {
+                const dd = drawer.querySelector(".mwi-mm-clear-dropdown");
+                if (dd) {
+                    const shown = dd.style.display !== "none";
+                    dd.style.display = shown ? "none" : "block";
+                    if (!shown) {
+                        const closer = (e) => {
+                            if (!dd.parentElement?.contains(e.target)) {
+                                dd.style.display = "none";
+                                document.removeEventListener("click", closer, true);
+                            }
+                        };
+                        setTimeout(() => document.addEventListener("click", closer, true), 0);
+                    }
+                }
+                return;
+            }
+
+            // 常备量编辑弹窗
+            if (act === "edit-threshold") {
+                const itemId = actionEl.getAttribute("data-item-id") || "";
+                if (itemId) _showThresholdPopover(actionEl, itemId);
+                return;
+            }
+
+            // 设置面板开关
+            if (act === "toggle-settings") {
+                STATE.settingsPanelOpen = !STATE.settingsPanelOpen;
+                syncSettingsPanelVisibility(drawer);
+                actionEl.classList.toggle("is-on", STATE.settingsPanelOpen);
+                updateWSStatusDisplay();
+                return;
+            }
+
+            // 制作计划面板展开/收起
+            if (act === "toggle-plans-panel") {
+                if (!STATE.craftingPlansEnabled) {
+                    showToast(t("toast_plans_disabled"), "info");
+                    return;
+                }
+                STATE.plansCollapsed = !STATE.plansCollapsed;
+                if (!STATE.plansCollapsed && _plansPanel) _plansPanel.__posInited = false;
+                renderPlansUI();
+                return;
+            }
+
+            // 从背包添加模式
+            if (act === "pick-from-inventory") {
+                if (STATE.pickMode) showPickConfirmModal();
+                else enterPickMode();
+                return;
+            }
+
+            // ── 以下为设置面板内的开关切换 ──
+            if (act === "toggle-lock") {
+                STATE.drawerLocked = !STATE.drawerLocked;
+                saveToggles(); renderSettingsToggles(); renderStatus();
+                return;
+            }
+            if (act === "toggle-locate") {
+                setLocateEnabled(!STATE.locateEnabled);
+                saveToggles(); renderSettingsToggles();
+                showToast(STATE.locateEnabled ? t("toast_locate_on") : t("toast_locate_off"), "info");
+                return;
+            }
+            if (act === "toggle-include-upgrade") {
+                STATE.includeUpgrade = !STATE.includeUpgrade;
+                saveToggles(); renderSettingsToggles();
+                STATE.lastDataSignature = "";
+                refreshNow();
+                showToast(STATE.includeUpgrade ? t("toast_upgrade_on") : t("toast_upgrade_off"), "info");
+                return;
+            }
+            if (act === "toggle-inventory-sync") {
+                STATE.inventorySyncEnabled = !STATE.inventorySyncEnabled;
+                saveToggles(); renderSettingsToggles();
+                if (STATE.inventorySyncEnabled) {
+                    scanInventoryDOM(true);
+                    resetAllBaselines();
+                    setupInventorySyncObservers();
+                    const src = _wsInventory.ready ? t("ws_exact") : "DOM";
+                    showToast(t("toast_sync_on", src), "info");
+                } else {
+                    showToast(t("toast_sync_off"), "info");
+                }
+                return;
+            }
+            if (act === "toggle-auto-collapse") {
+                STATE.autoCollapseEnabled = !STATE.autoCollapseEnabled;
+                saveToggles(); renderSettingsToggles();
+                showToast(STATE.autoCollapseEnabled ? t("toast_autocollapse_on") : t("toast_autocollapse_off"), "info");
+                return;
+            }
+            if (act === "toggle-auto-prefill") {
+                STATE.autoPrefillEnabled = !STATE.autoPrefillEnabled;
+                saveToggles(); renderSettingsToggles();
+                showToast(STATE.autoPrefillEnabled ? t("toast_prefill_on") : t("toast_prefill_off"), "info");
+                return;
+            }
+            if (act === "toggle-purchase-nav") {
+                STATE.purchaseNavEnabled = !STATE.purchaseNavEnabled;
+                saveToggles(); renderSettingsToggles();
+                showToast(STATE.purchaseNavEnabled ? t("toast_nav_on") : t("toast_nav_off"), "info");
+                return;
+            }
+            if (act === "toggle-crafting-plans") {
+                STATE.craftingPlansEnabled = !STATE.craftingPlansEnabled;
+                saveToggles(); renderSettingsToggles();
+                renderPlansUI(); _updatePlansToggleBtn();
+                STATE.lastDataSignature = "";
+                refreshNow();
+                showToast(STATE.craftingPlansEnabled
+                    ? t("toast_plans_on")
+                    : t("toast_plans_off"), "info");
+                return;
+            }
+
+            // v1.4.3: 任务追踪开关
+            if (act === "toggle-quest-tracking") {
+                STATE.questPanelEnabled = !STATE.questPanelEnabled;
+                saveToggles(); renderSettingsToggles();
+                if (!STATE.questPanelEnabled) STATE.questPanelVisible = false;
+                _questTracker.renderPanel();
+                return;
+            }
+            // v1.4.3: 任务面板展开/折叠
+            if (act === "toggle-quest-panel") {
+                STATE.questPanelVisible = !STATE.questPanelVisible;
+                _questTracker.renderPanel();
+                actionEl.classList.toggle("is-on", STATE.questPanelVisible);
+                return;
+            }
+            // v1.4.3: 任务操作 — 补充缺料
+            if (act === "quest-add-missing") {
+                const actionHrid = actionEl.getAttribute("data-action-hrid");
+                if (!actionHrid) return;
+                const action = _dataLayer._actionMap?.[actionHrid];
+                if (!action || !action.inputItems) return;
+                const artisanBuff = _dataLayer._getArtisanBuff(action.type);
+                const zVal = _zScoreCalc.getActiveZ();
+                const remaining = parseInt(actionEl.getAttribute("data-remaining") || "0", 10) || 0;
+                const tasks = _questTracker.getProductionTasks();
+                const task = tasks.find(t => t.actionHrid === actionHrid);
+                const runs = task ? task.remaining : remaining;
+                let addedTypes = 0;
+                for (const input of action.inputItems) {
+                    const isUpgrade = action.upgradeItemHrid && input.itemHrid === action.upgradeItemHrid;
+                    const needed = isUpgrade ? runs : _zScoreCalc.calcMaterials(input.count, runs, artisanBuff, zVal).total;
+                    const bareId = input.itemHrid.replace(/^\/items\//, "");
+                    const stock = getEffectiveInventory(bareId, actionHrid);
+                    const missing = Math.max(0, needed - stock);
+                    if (missing > 0 && !isCoinItem(bareId)) {
+                        addToCart({ itemId: bareId, name: _dataLayer.hridToName(input.itemHrid) || bareId, iconRef: input.itemHrid, quantity: missing, source: "material" });
+                        addedTypes++;
+                    }
+                }
+                // 追加升级物品（不在 inputItems 中的情况）
+                if (action.upgradeItemHrid) {
+                    const upgHrid = action.upgradeItemHrid;
+                    const alreadyInInputs = action.inputItems.some(i => i.itemHrid === upgHrid);
+                    if (!alreadyInInputs) {
+                        const bareId = upgHrid.replace(/^\/items\//, "");
+                        const stock = getEffectiveInventory(bareId, actionHrid);
+                        const missing = Math.max(0, runs - stock);
+                        if (missing > 0 && !isCoinItem(bareId)) {
+                            addToCart({ itemId: bareId, name: _dataLayer.hridToName(upgHrid) || bareId, iconRef: upgHrid, quantity: missing, source: "upgrade" });
+                            addedTypes++;
+                        }
+                    }
+                }
+                if (addedTypes > 0) { showToast(t("toast_quest_added", addedTypes), "success"); renderCart(); }
+                else showToast(t("toast_no_missing"), "info");
+                return;
+            }
+            // v1.4.3: 任务操作 — 创建计划
+            if (act === "quest-create-plan") {
+                const actionHrid = actionEl.getAttribute("data-action-hrid");
+                const remaining = parseInt(actionEl.getAttribute("data-remaining") || "0", 10) || 0;
+                if (!actionHrid || remaining <= 0) return;
+                const action = _dataLayer._actionMap?.[actionHrid];
+                if (!action) return;
+                const outputItem = action.outputItems?.[0];
+                const recipeName = _dataLayer.hridToName(outputItem?.itemHrid) || actionHrid;
+                const allItems = (action.inputItems || []).map(i => ({ itemId: i.itemHrid.replace(/^\/items\//, ""), totalNeeded: i.count * remaining }));
+                // 追加升级物品
+                if (action.upgradeItemHrid) {
+                    const upgHrid = action.upgradeItemHrid;
+                    const alreadyInInputs = (action.inputItems || []).some(i => i.itemHrid === upgHrid);
+                    if (!alreadyInInputs) {
+                        allItems.push({ itemId: upgHrid.replace(/^\/items\//, ""), totalNeeded: remaining });
+                    }
+                }
+                // v1.4.3: 同 action 的多个任务累加计划次数，而非覆盖
+                const existingPlan = STATE.craftingPlans.get(actionHrid);
+                let totalCount = remaining;
+                if (existingPlan && existingPlan.status === "active") {
+                    totalCount += existingPlan.craftCount;
+                    for (const item of allItems) {
+                        const bareId = normalizeCartItemId(item.itemId);
+                        if (bareId && existingPlan.materials[bareId]) {
+                            item.totalNeeded += existingPlan.materials[bareId];
+                        }
+                    }
+                }
+                createOrUpdatePlan(actionHrid, recipeName, totalCount, allItems);
+                showToast(t("toast_quest_plan", recipeName), "success");
+                renderPlansUI();
+                return;
+            }
+
+            // v1.4.0: 语言切换
+            if (act === "toggle-lang") {
+                _currentLang = _currentLang === "zh" ? "en" : "zh";
+                _saveLangPref();
+                _rebuildDrawerForLang();
+                return;
+            }
+
+            // 手动同步
+            if (act === "manual-sync") {
+                const snapshot = scanInventoryDOM(true);
+                if (!snapshot.size) {
+                    showToast(t("toast_no_inv"), "error");
+                    return;
+                }
+                for (const row of STATE.cart.values()) {
+                    if (row.baselineStock == null) {
+                        row.baselineStock = snapshot.get(normalizeCartItemId(row.itemId)) || 0;
+                    }
+                }
+                syncCartWithInventory();
+                const src = _wsInventory.ready ? "WS" : "DOM";
+                showToast(t("toast_sync_done", src, snapshot.size), "info");
+                return;
+            }
+
+            // 重置面板大小
+            if (act === "reset-size") {
+                resetDrawerSize();
+                resetPlansPanelPosition();
+                showToast(t("toast_reset_done"), "info");
+                return;
+            }
+
+            // 直达市场
+            if (act === "market") {
+                const itemId = actionEl.getAttribute("data-item-id") || "";
+                const targetId = normalizeCartItemId(itemId);
+                if (!targetId) return;
+                STATE.marketTargetItemId = targetId;
+                renderCart();
+                const ok = await openMarketplaceForItem(targetId);
+                if (ok) {
+                    if (STATE.locateEnabled) {
+                        setAction(t("action_market_ok", targetId));
+                        showToast(t("toast_market_ok", targetId), "success");
+                        scheduleRefresh(120);
+                        setTimeout(() => scheduleRefresh(420), 220);
+                    } else {
+                        setAction(t("action_market_off", targetId));
+                        showToast(t("toast_market_off"), "info");
+                    }
+                } else {
+                    setAction(t("action_market_fail", targetId));
+                    showToast(t("toast_market_fail"), "error");
+                }
+                return;
+            }
+
+            // 收藏切换
+            if (act === "star") {
+                const id = actionEl.getAttribute("data-item-id") || "";
+                if (id) toggleCartItemStar(id);
+                return;
+            }
+
+            // 移除物品
+            if (act === "remove") {
+                const id = actionEl.getAttribute("data-item-id") || "";
+                if (id) {
+                    removeCartItem(id);
+                    showToast(t("toast_item_removed"), "info");
+                }
+                return;
+            }
+        });
+
+        // ─ 数量输入框 focusout → 提交修改 ────────────────
+        drawer.addEventListener("focusout", (event) => {
+            const t = event.target;
+            if (!(t instanceof HTMLInputElement) || !t.classList.contains("mwi-mm-qty-input")) return;
+            const id = t.getAttribute("data-item-id") || "";
+            const nv = parseInt(t.value, 10);
+            if (id) updateCartItemQty(id, nv);
+        });
+
+        // ─ 数量输入框 keydown → Enter 提交 / Escape 回退 ─
+        drawer.addEventListener("keydown", (event) => {
+            const t = event.target;
+            if (!(t instanceof HTMLInputElement) || !t.classList.contains("mwi-mm-qty-input")) return;
+            event.stopPropagation();
+            if (event.key === "Enter") t.blur();
+            if (event.key === "Escape") {
+                const id = t.getAttribute("data-item-id") || "";
+                const row = STATE.cart.get(normalizeCartItemId(id));
+                if (row) t.value = String(Math.ceil(row.quantity));
+                t.blur();
+            }
+        });
+
+        // ─ 点击面板外部关闭（非锁定模式）─────────────────
+        document.addEventListener("click", (event) => {
+            if (STATE.ui.drawer?.style.display !== "flex" || STATE.drawerLocked) return;
+            const t = event.target;
+            if (!(t instanceof Element)) return;
+            if (STATE.ui.drawer.contains(t) || STATE.ui.tab?.contains(t) || (_plansPanel && _plansPanel.contains(t))) return;
+            closeCartDrawer();
+        }, true);
+
+        // ─ Escape 键关闭面板 / 退出选择模式 ──────────────
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                if (STATE.pickMode) {
+                    if (document.querySelector(".mwi-mm-pick-modal")) closePickConfirmModal();
+                    else exitPickMode();
+                    return;
+                }
+                if (!STATE.drawerLocked) closeCartDrawer();
+            }
+        });
+
+        // 初始渲染
+        renderCart();
+        renderSettingsToggles();
+        renderPlansUI();
+    }
+
+    /** 更新WS状态显示 */
+    function updateWSStatusDisplay() {
+        const el = STATE.ui.drawer?.querySelector(".mwi-mm-ws-status");
+        if (!el) return;
+        const wsStat = _wsInventory.ready ? t("ws_status_ok", _wsInventory._detailMap.size) : t("ws_status_wait");
+        const src = _capturedClientData?._src || t("none");
+        const dlStat = _dataLayer.ready ? t("dl_status_ok", _dataLayer._outputToAction?.size || 0, src) : t("dl_status_wait");
+        el.textContent = `${wsStat} · ${dlStat}`;
+    }
+
+    /** 渲染设置面板中的开关状态 */
+    function renderSettingsToggles() {
+        if (!STATE.ui.drawer) return;
+        const panel = STATE.ui.drawer.querySelector(".mwi-mm-settings-panel");
+        if (!panel) return;
+
+        const toggleMap = {
+            "toggle-lock": STATE.drawerLocked,
+            "toggle-locate": STATE.locateEnabled,
+            "toggle-include-upgrade": STATE.includeUpgrade,
+            "toggle-inventory-sync": STATE.inventorySyncEnabled,
+            "toggle-auto-collapse": STATE.autoCollapseEnabled,
+            "toggle-auto-prefill": STATE.autoPrefillEnabled,
+            "toggle-purchase-nav": STATE.purchaseNavEnabled,
+            "toggle-crafting-plans": STATE.craftingPlansEnabled,
+            "toggle-quest-tracking": STATE.questPanelEnabled
+        };
+
+        for (const [act, enabled] of Object.entries(toggleMap)) {
+            const btn = panel.querySelector(`button[data-act="${act}"]`);
+            if (!btn) continue;
+            btn.classList.toggle("is-on", enabled);
+            btn.classList.toggle("is-off", !enabled);
+            btn.textContent = enabled ? t("toggle_on") : t("toggle_off");
+        }
+
+        // v1.4.0: 语言按钮特殊处理
+        const langBtn = panel.querySelector('button[data-act="toggle-lang"]');
+        if (langBtn) {
+            langBtn.textContent = _currentLang === "zh" ? t("s_lang_zh") : t("s_lang_en");
+            langBtn.classList.toggle("is-on", _currentLang === "en");
+            langBtn.classList.toggle("is-off", _currentLang !== "en");
+        }
+
+        // v1.4.3: Z-score / Guzzling Pouch 下拉框同步
+        const zSelect = panel.querySelector('select[data-act="change-zscore"]');
+        if (zSelect && zSelect.value !== String(STATE.zScoreIndex)) zSelect.value = String(STATE.zScoreIndex);
+        const gSelect = panel.querySelector('select[data-act="change-guzzling"]');
+        if (gSelect && gSelect.value !== String(STATE.guzzlingPouchLevel)) gSelect.value = String(STATE.guzzlingPouchLevel);
+    }
+
+    /** 渲染状态（FAB徽章、设置面板开关等） */
+    function renderStatus() {
+        renderSettingsToggles();
+        const sb = STATE.ui.drawer?.querySelector?.('button[data-act="toggle-settings"]');
+        if (sb) sb.classList.toggle("is-on", STATE.settingsPanelOpen);
+        syncSettingsPanelVisibility(STATE.ui.drawer);
+        if (STATE.ui.tab) {
+            const count = [...STATE.cart.values()].filter(r => r.quantity > 0).length;
+            STATE.ui.tab.setAttribute("aria-label", t("shopping_list_count", count));
+            const badge = STATE.ui.tab.querySelector(".mwi-mm-fab-badge");
+            if (badge) {
+                badge.textContent = count > 99 ? "99+" : String(count);
+                badge.style.display = count > 0 ? "flex" : "none";
+            }
+        }
+    }
+
+    /** 关闭清空按钮的下拉菜单 */
+    function _closeClearDropdown(drawer) {
+        const dd = drawer?.querySelector(".mwi-mm-clear-dropdown");
+        if (dd) dd.style.display = "none";
+    }
+
+    /** 打开常备量编辑弹窗 */
+    function _showThresholdPopover(anchor, itemId) {
+        // 移除已有弹窗
+        document.querySelectorAll(".mwi-mm-th-modal").forEach(el => el.remove());
+
+        const id = normalizeCartItemId(itemId);
+        const row = STATE.cart.get(id);
+        if (!row) return;
+
+        const currentStock = getInventoryCount(id);
+        const hasThreshold = row.threshold > 0;
+        const initVal = hasThreshold ? row.threshold : "";
+
+        // 创建弹窗 DOM
+        const modal = document.createElement("div");
+        modal.className = "mwi-mm-th-modal";
+        modal.innerHTML = `
+            <div class="mwi-mm-th-modal-backdrop"></div>
+            <div class="mwi-mm-th-modal-content">
+                <div class="mwi-mm-th-modal-head">
+                    <div class="title">${hasThreshold ? t("edit_threshold_title") : t("set_threshold_title")}</div>
+                    <div class="subtitle">${escapeHtml(resolveCartDisplayName(row))}</div>
+                </div>
+                <div class="mwi-mm-th-modal-body">
+                    <div class="mwi-mm-th-modal-desc">${t("threshold_desc")}</div>
+                    <div class="mwi-mm-th-modal-field">
+                        <label>${t("threshold_amount")}</label>
+                        <input class="mwi-mm-th-modal-input" type="text" inputmode="numeric"
+                               value="${initVal}" placeholder="${t("threshold_placeholder")}" />
+                        <span class="mwi-mm-th-modal-unit">${t("threshold_unit")}</span>
+                    </div>
+                    <div class="mwi-mm-th-modal-preview">${t("current_stock", formatQty(currentStock))}</div>
+                </div>
+                <div class="mwi-mm-th-modal-foot">
+                    ${hasThreshold ? `<button class="mwi-mm-th-modal-clear" data-role="clear">${t("clear_threshold")}</button>` : ""}
+                    <button data-role="cancel">${t("cancel")}</button>
+                    <button class="primary" data-role="confirm">${t("confirm")}</button>
+                </div>
+            </div>`;
+
+        document.body.appendChild(modal);
+        const input = modal.querySelector(".mwi-mm-th-modal-input");
+        const preview = modal.querySelector(".mwi-mm-th-modal-preview");
+        input?.focus();
+        input?.select();
+
+        // 实时预览缺料计算
+        input?.addEventListener("input", () => {
+            const val = parseInt(input.value, 10);
+            if (!Number.isFinite(val) || val <= 0) {
+                preview.textContent = t("current_stock", formatQty(currentStock));
+            } else {
+                const diff = val - currentStock;
+                preview.textContent = diff > 0
+                    ? t("threshold_preview_short", formatQty(currentStock), formatQty(val), formatQty(currentStock), formatQty(diff))
+                    : t("threshold_preview_ok", formatQty(currentStock));
+            }
+        });
+
+        const closeModal = () => modal.remove();
+        modal.querySelector(".mwi-mm-th-modal-backdrop").addEventListener("click", closeModal);
+
+        // 按钮点击：确认 / 清除 / 取消
+        modal.addEventListener("click", (e) => {
+            const role = e.target.closest("[data-role]")?.getAttribute("data-role");
+            if (!role) return;
+            if (role === "confirm") {
+                const val = parseInt(input.value, 10);
+                if (Number.isFinite(val) && val > 0) {
+                    setCartItemThreshold(itemId, val);
+                    showToast(t("toast_threshold_set", resolveCartDisplayName(row), formatQty(val)), "success");
+                } else {
+                    showToast(t("toast_threshold_invalid"), "error");
+                    return;
+                }
+            } else if (role === "clear") {
+                clearCartItemThreshold(itemId);
+                showToast(t("toast_threshold_cleared", resolveCartDisplayName(row)), "info");
+            }
+            closeModal();
+        });
+
+        // 键盘：Enter 确认 / Escape 关闭
+        modal.addEventListener("keydown", (e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") modal.querySelector('[data-role="confirm"]')?.click();
+            if (e.key === "Escape") closeModal();
+        });
+    }
+
+    /** 更新购物车行中的「常备量」状态显示 */
+    function _updateThresholdLine(rowEl, row) {
+        const rowId = normalizeCartItemId(row.itemId);
+        let existing = rowEl.querySelector(".mwi-mm-threshold-line, .mwi-mm-set-threshold-btn");
+
+        if (row.starred && row.threshold > 0) {
+            // 已设置常备量 → 显示库存状态
+            const currentStock = getInventoryCount(rowId);
+            const stockStatus = currentStock >= row.threshold
+                ? `<span class="mwi-mm-th-ok">${t("threshold_sufficient")}</span>`
+                : `<span class="mwi-mm-th-low">${t("threshold_low")}</span>`;
+            const html = `<svg class="mwi-mm-th-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>${t("threshold_label")} <span class="mwi-mm-th-val">${formatQty(row.threshold)}</span><span class="mwi-mm-th-stock">· ${t("stock_label")} ${formatQty(currentStock)} · ${stockStatus}</span>`;
+
+            if (existing && existing.classList.contains("mwi-mm-threshold-line")) {
+                existing.innerHTML = html;
+            } else {
+                if (existing) existing.remove();
+                const div = document.createElement("div");
+                div.className = "mwi-mm-threshold-line";
+                div.setAttribute("data-act", "edit-threshold");
+                div.setAttribute("data-item-id", row.itemId);
+                div.title = t("click_edit_threshold");
+                div.innerHTML = html;
+                rowEl.querySelector(".meta")?.appendChild(div);
+            }
+        } else if (row.starred) {
+            // 已收藏但未设置常备 → 提供「+ 设置常备量」按钮
+            if (!existing || !existing.classList.contains("mwi-mm-set-threshold-btn")) {
+                if (existing) existing.remove();
+                const btn = document.createElement("button");
+                btn.className = "mwi-mm-set-threshold-btn";
+                btn.setAttribute("data-act", "edit-threshold");
+                btn.setAttribute("data-item-id", row.itemId);
+                btn.textContent = t("set_threshold");
+                rowEl.querySelector(".meta")?.appendChild(btn);
+            }
+        } else {
+            // 非收藏物品 → 移除常备信息
+            if (existing) existing.remove();
+        }
+    }
+
+    let _onCartRendered = null;
+
+    /** 渲染购物车列表（增量 DOM 更新） */
+    function renderCart() {
+        if (!STATE.ui.cartList) return;
+        const query = STATE.cartSearchQuery;
+
+        // 过滤：隐藏数量为 0 的非收藏项；搜索时按名称/ID 匹配
+        const entries = [...STATE.cart.values()]
+            .filter((x) => {
+                if (x.quantity <= 0 && !x.starred) return false;
+                if (!query) return true;
+                const displayName = resolveCartDisplayName(x).toLowerCase();
+                return displayName.includes(query)
+                    || (x.name || "").toLowerCase().includes(query)
+                    || (x.itemId || "").toLowerCase().includes(query);
+            })
+            .sort((a, b) => {
+                const aA = a.quantity > 0, bA = b.quantity > 0;
+                if (aA && !bA) return -1;
+                if (!aA && bA) return 1;
+                if (a.starred && !b.starred) return -1;
+                if (!a.starred && b.starred) return 1;
+                return resolveCartDisplayName(a).localeCompare(resolveCartDisplayName(b), _getLocale());
+            });
+
+        // 空列表提示
+        if (!entries.length) {
+            const emptyMsg = query ? t("no_match", escapeHtml(query)) : t("empty_cart");
+            STATE.ui.cartList.innerHTML = `<div class="mwi-mm-cart-empty">${emptyMsg}</div>`;
+            renderStatus();
+            return;
+        }
+
+        const targetId = normalizeCartItemId(STATE.marketTargetItemId || "");
+        STATE.ui.cartList.querySelectorAll(".mwi-mm-cart-empty").forEach((el) => el.remove());
+
+        // 收集已有 DOM 行，移除不再需要的行
+        const existingRows = new Map();
+        STATE.ui.cartList.querySelectorAll(".mwi-mm-cart-row").forEach((el) => {
+            const id = el.getAttribute("data-item-id");
+            if (id) existingRows.set(id, el);
+        });
+        const newIds = new Set(entries.map((r) => normalizeCartItemId(r.itemId)));
+        for (const [id, el] of existingRows) {
+            if (!newIds.has(id)) {
+                el.remove();
+                existingRows.delete(id);
+            }
+        }
+
+        let prevEl = null;
+        for (const row of entries) {
+            const rowId = normalizeCartItemId(row.itemId);
+            const qtyText = formatQty(Math.ceil(row.quantity || 0));
+            const isTarget = targetId && rowId === targetId;
+            const existing = existingRows.get(rowId);
+
+            if (existing) {
+                // 更新名称
+                const nameEl = existing.querySelector(".meta .name-text");
+                const displayName = resolveCartDisplayName(row);
+                if (nameEl && nameEl.textContent !== displayName) nameEl.textContent = displayName;
+
+                // ★ v1.3.4: 同步图标 href（sprite base 可能在首次渲染后才就绪）
+                const iconUse = existing.querySelector(".icon-btn svg use");
+                if (iconUse) {
+                    const correctHref = resolveItemIconHref(row);
+                    if (correctHref && iconUse.getAttribute("href") !== correctHref) {
+                        iconUse.setAttribute("href", correctHref);
+                        iconUse.setAttribute("xlink:href", correctHref);
+                    }
+                }
+
+                // 更新收藏状态
+                const starBtn = existing.querySelector(".mwi-mm-star-btn");
+                if (starBtn) starBtn.classList.toggle("is-starred", Boolean(row.starred));
+
+                // 状态标志
+                const isFulfilled = row.starred && row.quantity <= 0;
+                const isMonitoring = row.starred && row.threshold > 0 && row.quantity > 0;
+                const isRefilled = Boolean(row._justRefilled);
+                existing.classList.toggle("is-fulfilled", isFulfilled);
+                existing.classList.toggle("is-monitoring", isMonitoring);
+                existing.classList.toggle("is-refilled", isRefilled);
+                if (isRefilled) { row._justRefilled = false; setTimeout(() => existing.classList.remove("is-refilled"), 2500); }
+                const qtyContainer = existing.querySelector(".meta .qty");
+                if (qtyContainer) {
+                    const qtyInput = qtyContainer.querySelector(".mwi-mm-qty-input");
+                    if (isFulfilled) {
+                        if (!qtyContainer.querySelector(".mwi-mm-fulfilled-tag")) {
+                            const tag = document.createElement("span");
+                            tag.className = "mwi-mm-fulfilled-tag";
+                            tag.textContent = t("fulfilled");
+                            qtyContainer.prepend(tag);
+                        }
+                        for (const node of qtyContainer.childNodes) {
+                            if (node.nodeType === 3 && (node.textContent.includes("缺料") || node.textContent.includes("Short"))) node.textContent = "";
+                        }
+                        if (qtyInput) {
+                            qtyInput.classList.add("mwi-mm-qty-fulfilled");
+                            if (document.activeElement !== qtyInput) qtyInput.value = "0";
+                        }
+                    } else {
+                        qtyContainer.querySelector(".mwi-mm-fulfilled-tag")?.remove();
+                        if (qtyInput) {
+                            qtyInput.classList.remove("mwi-mm-qty-fulfilled");
+                            if (document.activeElement !== qtyInput && qtyInput.value !== qtyText) qtyInput.value = qtyText;
+                        }
+                        let refillTag = qtyContainer.querySelector(".mwi-mm-refill-tag");
+                        if (isRefilled && !refillTag) {
+                            refillTag = document.createElement("span");
+                            refillTag.className = "mwi-mm-refill-tag";
+                            refillTag.textContent = t("auto_refill");
+                            qtyContainer.appendChild(refillTag);
+                            setTimeout(() => refillTag?.remove(), 3000);
+                        }
+                    }
+                }
+                _updateThresholdLine(existing, row);
+                existing.classList.toggle("is-target", isTarget);
+
+                // 维护 DOM 顺序
+                if (prevEl) {
+                    if (existing.previousElementSibling !== prevEl) prevEl.after(existing);
+                } else {
+                    if (existing !== STATE.ui.cartList.firstElementChild) STATE.ui.cartList.prepend(existing);
+                }
+                prevEl = existing;
+            } else {
+                const div = document.createElement("div");
+                const isFulfilled = row.starred && row.quantity <= 0;
+                const isMonitoring = row.starred && row.threshold > 0 && row.quantity > 0;
+                const isRefilled = Boolean(row._justRefilled);
+                // 构建 CSS 类名
+                let cls = "mwi-mm-cart-row";
+                if (isTarget) cls += " is-target";
+                if (isFulfilled) cls += " is-fulfilled";
+                if (isMonitoring) cls += " is-monitoring";
+                if (isRefilled) cls += " is-refilled";
+                div.className = cls;
+                div.setAttribute("data-item-id", rowId);
+
+                const starredCls = row.starred ? " is-starred" : "";
+
+                // 数量区域 HTML
+                let qtyHtml;
+                if (isFulfilled) {
+                    qtyHtml = `<span class="mwi-mm-fulfilled-tag">${t("fulfilled")}</span>`
+                        + `<input type="text" inputmode="numeric" class="mwi-mm-qty-input mwi-mm-qty-fulfilled"`
+                        + ` data-item-id="${escapeHtml(row.itemId)}" value="0" title="${t("qty_reactivate_tip")}" />`;
+                } else {
+                    qtyHtml = `${t("shortage")} <input type="text" inputmode="numeric" class="mwi-mm-qty-input"`
+                        + ` data-item-id="${escapeHtml(row.itemId)}" value="${escapeHtml(qtyText)}" />`;
+                    if (isRefilled) qtyHtml += ` <span class="mwi-mm-refill-tag">${t("auto_refill")}</span>`;
+                }
+
+                // 常备量区域 HTML
+                let thresholdHtml = "";
+                if (row.starred && row.threshold > 0) {
+                    const cs = getInventoryCount(rowId);
+                    const ss = cs >= row.threshold
+                        ? `<span class="mwi-mm-th-ok">${t("threshold_sufficient")}</span>`
+                        : `<span class="mwi-mm-th-low">${t("threshold_low")}</span>`;
+                    thresholdHtml = `<div class="mwi-mm-threshold-line" data-act="edit-threshold" data-item-id="${escapeHtml(row.itemId)}" title="${t("click_edit_threshold")}">`
+                        + `<svg class="mwi-mm-th-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>`
+                        + `${t("threshold_label")} <span class="mwi-mm-th-val">${formatQty(row.threshold)}</span>`
+                        + `<span class="mwi-mm-th-stock">· ${t("stock_label")} ${formatQty(cs)} · ${ss}</span></div>`;
+                } else if (row.starred) {
+                    thresholdHtml = `<button class="mwi-mm-set-threshold-btn" data-act="edit-threshold" data-item-id="${escapeHtml(row.itemId)}">${t("set_threshold")}</button>`;
+                }
+
+                // 行完整 HTML
+                div.innerHTML = `
+                    <button class="icon-btn" data-act="market" data-item-id="${escapeHtml(row.itemId)}" title="${t("market_icon_tip")}">${renderItemIconSvg(row)}</button>
+                    <div class="meta">
+                        <div class="name">
+                            <button class="mwi-mm-star-btn${starredCls}" data-act="star" data-item-id="${escapeHtml(row.itemId)}" title="${t("star_pin")}">
+                                <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>
+                            </button>
+                            <span class="name-text">${escapeHtml(resolveCartDisplayName(row))}</span>
+                        </div>
+                        <div class="qty">${qtyHtml}</div>
+                        ${thresholdHtml}
+                    </div>
+                    <div class="ops">
+                        <button class="market-btn" data-act="market" data-item-id="${escapeHtml(row.itemId)}">${t("go_to_market")}</button>
+                        <button class="remove-btn" data-act="remove" data-item-id="${escapeHtml(row.itemId)}">${t("remove")}</button>
+                    </div>`;
+
+                if (isRefilled) {
+                    row._justRefilled = false;
+                    setTimeout(() => div.classList.remove("is-refilled"), 2500);
+                    const rt = div.querySelector(".mwi-mm-refill-tag");
+                    if (rt) setTimeout(() => rt?.remove(), 3000);
+                }
+                if (prevEl) prevEl.after(div); else STATE.ui.cartList.prepend(div);
+                prevEl = div;
+            }
+        }
+        renderStatus();
+        if (_onCartRendered) _onCartRendered();
+    }
+
+    // ── 刷新逻辑 ──────────────────────────────────────────────────
+
+    /**
+     * 立即刷新：检测当前弹窗，提取缺料数据，更新 UI
+     * ★ v1.3.7: 增加强化面板重建冷却保护，防止面板清空期间误清数据
+     */
+    function refreshNow() {
+        // 房屋弹窗为模态层级，优先检测；关闭后自然回退到技能面板
+        let modal = findActiveHousePanel();
+        let data = null;
+
+        if (modal) {
+            data = extractHouseRequirements(modal);
+        } else {
+            modal = findActiveModal();
+            if (modal) data = extractRequirements(modal);
+        }
+
+        // ★ v1.3.7 修复 B: 强化面板重建冷却保护
+        // 游戏在每次强化完成后会完全拆毁面板 DOM 并在 3-5 秒后重建。
+        // 空白期间如果清除数据，会导致摘要面板/计划次数输入框丢失、badges 闪烁。
+        // 策略: 面板从"有数据"变为"空/不存在"时进入 6 秒冷却期，保持旧数据不清除。
+        const now = Date.now();
+        const dataIsEmpty = !modal || !data || (data.requirements.length === 0 && !data.upgrade);
+        const hadData = STATE.currentData && (STATE.currentData.requirements.length > 0 || STATE.currentData.upgrade);
+
+        if (dataIsEmpty && hadData) {
+            // 面板刚变空 — 设置冷却期
+            if (!STATE.enhCooldownUntil || STATE.enhCooldownUntil < now) {
+                STATE.enhCooldownUntil = now + 6000;
+                STATE.lastNonEmptyModal = STATE.currentModal;
+            }
+        }
+
+        // 在冷却期内，面板为空时跳过刷新，保持旧数据
+        if (dataIsEmpty && STATE.enhCooldownUntil && now < STATE.enhCooldownUntil) {
+            return;
+        }
+
+        // 冷却期已过或面板已恢复 — 重置冷却状态
+        if (!dataIsEmpty) {
+            STATE.enhCooldownUntil = 0;
+            STATE.lastNonEmptyModal = null;
+        }
+
+        // 弹窗确实已关闭（冷却期也过了）→ 清理状态
+        if (!modal) {
+            if (STATE.currentModal) clearInlineBadges(STATE.currentModal);
+            STATE.currentModal = null;
+            STATE.currentData = null;
+            STATE.lastDataSignature = "";
+            STATE.enhCooldownUntil = 0;
+            syncMarketLocator();
+            return;
+        }
+
+        // 签名未变 + 徽章已存在 → 跳过重绘
+        const signature = buildDataSignature(data);
+        const sameModal = STATE.currentModal === modal;
+        if (sameModal && signature === STATE.lastDataSignature) {
+            const needsBadges = data.requirements.some((r) => r.inputEl);
+            const hasBadges = needsBadges && modal.querySelector("[data-mm-badge]");
+            if (!needsBadges || hasBadges) {
+                syncMarketLocator();
+                return;
+            }
+        }
+
+        // 切换弹窗时先清旧徽章
+        if (STATE.currentModal && STATE.currentModal !== modal) clearInlineBadges(STATE.currentModal);
+
+        STATE.currentModal = modal;
+        STATE.currentData = data;
+        STATE.lastDataSignature = signature;
+
+        renderInlineBadges(modal, data);
+        renderSummaryPanel(modal, data);
+        // v1.4.3: 渲染展开的子配方树
+        const summaryPanel = modal.querySelector(".mwi-mm-summary-panel");
+        if (summaryPanel && data._dataLayerUsed) renderChainSubRows(summaryPanel, data);
+
+        if (data.totalMissingTypes > 0) setAction(t("action_calculated", data.totalMissingTypes, formatQty(data.totalMissingQty)));
+        else setAction(t("action_sufficient"));
+        syncMarketLocator();
+    }
+
+    /** 延迟刷新（自动去抖） */
+    function scheduleRefresh(delay = 120) {
+        if (STATE.refreshTimer) clearTimeout(STATE.refreshTimer);
+        STATE.refreshTimer = setTimeout(() => {
+            STATE.refreshTimer = null;
+            refreshNow();
+        }, delay);
+    }
+
+    // ── Observer ──────────────────────────────────────────────────
+    //   监听 DOM 变化触发自动刷新，以及库存同步。
+
+    /** 设置全局 MutationObserver，过滤插件自身的 DOM 变更 */
+    function setupObservers() {
+        if (STATE.observer) STATE.observer.disconnect();
+
+        STATE.observer = new MutationObserver((mutations) => {
+            if (isObserverSuppressed()) return;
+
+            /** 判断节点是否属于本插件（避免自触发） */
+            const isPluginNode = (node) => {
+                if (!(node instanceof Element)) return false;
+                if (node.id && node.id.startsWith("mwi-mm-")) return true;
+                if ([...node.classList].some((cls) => cls.startsWith("mwi-mm-"))) return true;
+                if (node.closest?.(".mwi-mm-summary-panel")
+                    || node.closest?.("#mwi-mm-cart-drawer")
+                    || node.closest?.("#mwi-mm-cart-tab")
+                    || node.closest?.(".mwi-mm-toast")) return true;
+                return false;
+            };
+
+            const hasExternalMutation = mutations.some((m) => {
+                const target = m.target;
+                if (!(target instanceof Element || target instanceof CharacterData)) return false;
+                const node = target instanceof CharacterData ? target.parentElement : target;
+                if (!node) return false;
+                if (isPluginNode(node)) return false;
+                if (m.type === "childList") {
+                    const changed = [...m.addedNodes, ...m.removedNodes];
+                    if (changed.length && changed.every((x) => isPluginNode(x))) return false;
+                }
+                return true;
+            });
+
+            if (hasExternalMutation) scheduleRefresh(90);
+        });
+
+        STATE.observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+        // 监听制作数量输入框的用户输入
+        document.addEventListener("input", (event) => {
+            const t = event.target;
+            if (!(t instanceof Element) || !t.matches('input[class*="Input_input"]')) return;
+            const c = t.closest('[class*="SkillActionDetail_maxActionCountInput"]');
+            if (!c) return;
+            const m = c.closest(SEL.detailRoot);
+            if (m && m.querySelector('[class*="SkillActionDetail_maxActionCountInput"]') === c) scheduleRefresh(30);
+        }, true);
+
+        // 监听技能面板 / 房屋面板的点击
+        document.addEventListener("click", (event) => {
+            const t = event.target;
+            if (!(t instanceof Element)) return;
+            if (t.closest(SEL.detailRoot)
+                || t.closest('[class*="SkillAction_skillAction"]')
+                || t.closest(SEL.houseRoot)
+                || t.closest('[class*="HousePanel_"]')) {
+                scheduleRefresh(120);
+            }
+        }, true);
+
+        setupInventorySyncObservers();
+    }
+
+    // ── 库存同步 Observer ─────────────────────────────────────────
+    let _notifObserver = null;
+    let _invPanelObserver = null;
+    let _syncObserverRetryTimer = null;
+
+    function setupInventorySyncObservers() {
+        _tryAttachSyncObservers();
+    }
+
+    /** 尝试挂载通知区 / 背包面板的 MutationObserver，失败时自动重试 */
+    function _tryAttachSyncObservers() {
+        let attached = 0;
+
+        // 通知区域（购买成功等提示）
+        if (!_notifObserver) {
+            const el = document.querySelector('[class*="GamePage_notifications"]');
+            if (el) {
+                _notifObserver = new MutationObserver(() => triggerInventorySync(60));
+                _notifObserver.observe(el, { childList: true, subtree: true });
+                attached++;
+            }
+        } else { attached++; }
+
+        // 背包面板
+        if (!_invPanelObserver) {
+            const el = document.querySelector('[class*="Inventory_inventory"]');
+            if (el) {
+                _invPanelObserver = new MutationObserver(() => triggerInventorySync(50));
+                _invPanelObserver.observe(el, { childList: true, subtree: true, characterData: true });
+                attached++;
+            }
+        } else { attached++; }
+
+        // 两个 observer 未全部挂载 → 设定重试
+        if (attached < 2 && !_syncObserverRetryTimer) {
+            let retries = 0;
+            _syncObserverRetryTimer = setInterval(() => {
+                retries++;
+                _tryAttachSyncObservers();
+                if ((_notifObserver && _invPanelObserver) || retries > 30) {
+                    clearInterval(_syncObserverRetryTimer);
+                    _syncObserverRetryTimer = null;
+                }
+            }, 1000);
+        }
+    }
+
+    // ── v1.3.1: 市场预填数量模块 ──────────────────────────────────
+    const _marketPrefill = {
+        _observer: null,
+        _prefillDone: new WeakSet(),
+
+        /** 初始化预填模块 */
+        init() {
+            this._setupObserver();
+            console.log("[mwi-mm] v1.3.4 市场预填模块已初始化");
+        },
+
+        /** 监听 DOM 变化检测市场购买弹窗的出现 */
+        _setupObserver() {
+            if (this._observer) this._observer.disconnect();
+            this._observer = new MutationObserver((mutations) => {
+                if (!STATE.autoPrefillEnabled) return;
+                for (const m of mutations) {
+                    for (const node of m.addedNodes) {
+                        if (!(node instanceof Element)) continue;
+                        const modal = node.matches?.(MARKET_SEL.modalContent) ? node : node.querySelector?.(MARKET_SEL.modalContent);
+                        if (modal && !this._prefillDone.has(modal)) {
+                            setTimeout(() => this._tryPrefill(modal), 200);
+                        }
+                    }
+                }
+            });
+            this._observer.observe(document.body, { childList: true, subtree: true });
+        },
+
+        /** 尝试对购买弹窗执行预填（仅购买类型 + 购物车中有此物品时） */
+        _tryPrefill(modal) {
+            if (this._prefillDone.has(modal)) return;
+            const headerEl = modal.querySelector(MARKET_SEL.header);
+            const headerText = (headerEl?.textContent || "").trim();
+            const isBuyModal = /立即购买|购买挂牌|购买订单|buy|purchase/i.test(headerText);
+            if (!isBuyModal) return;
+
+            const useEl = modal.querySelector(MARKET_SEL.itemIcon);
+            const href = useEl?.getAttribute("href") || useEl?.getAttribute("xlink:href") || "";
+            if (!href.includes("#")) return;
+            const bareId = href.split("#").pop();
+            if (!bareId) return;
+
+            const cartItemId = normalizeCartItemId(bareId);
+            const cartRow = STATE.cart.get(cartItemId);
+            if (!cartRow || cartRow.quantity <= 0) return;
+
+            const neededQty = Math.ceil(cartRow.quantity);
+            const qtyInput = modal.querySelector(MARKET_SEL.quantityInput);
+            if (!qtyInput) return;
+
+            this._setReactInputValue(qtyInput, String(neededQty));
+            this._prefillDone.add(modal);
+            this._showPrefillHint(modal, cartRow.name || bareId, neededQty);
+            console.log(`[mwi-mm] 已预填数量: ${cartRow.name} × ${neededQty}`);
+        },
+
+        /** 通过原生 setter 设置 React 携带的 input 值（触发 input/change 事件） */
+        _setReactInputValue(input, value) {
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+            if (nativeInputValueSetter) nativeInputValueSetter.call(input, value);
+            else input.value = value;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+
+        /** 在购买弹窗插入「已预填」提示 */
+        _showPrefillHint(modal, itemName, qty) {
+            const qtyContainer = modal.querySelector(MARKET_SEL.quantityContainer);
+            if (!qtyContainer) return;
+            if (qtyContainer.parentElement.querySelector(".mwi-mm-prefill-hint")) return;
+            const hint = document.createElement("div");
+            hint.className = "mwi-mm-prefill-hint";
+            hint.innerHTML = `<span class="mwi-mm-prefill-tag">${t("prefill_tag")}</span> ${escapeHtml(itemName)} × <b>${formatQty(qty)}</b>`;
+            const parentContainer = qtyContainer.closest('[class*="MarketplacePanel_inputContainer"]');
+            if (parentContainer) parentContainer.insertBefore(hint, qtyContainer);
+            else qtyContainer.parentElement.insertBefore(hint, qtyContainer);
+        }
+    };
+
+    // ── v1.3.1: 采购导航条模块 ────────────────────────────────────
+    const _purchaseNav = {
+        _injectedNav: null,
+        _lastMarketPanel: null,
+        _observer: null,
+        _pollTimer: null,
+        _debounceTimer: null,
+
+        /** 初始化采购导航模块 */
+        init() {
+            this._setupObserver();
+            this._pollTimer = setInterval(() => this._poll(), 2000);
+            _marketDataCache.onChange(() => this._scheduleUpdate(80));
+            _wsInventory.onChange(() => this._scheduleUpdate(200));
+            _onCartRendered = () => {
+                if (this._injectedNav && this._lastMarketPanel) {
+                    this._injectNav();
+                }
+            };
+            console.log("[mwi-mm] v1.4.1 采购导航条模块已初始化（含内联购齐横幅）");
+        },
+
+        /** 监听 DOM 变化检测市场面板显示/隐藏 */
+        _setupObserver() {
+            if (this._observer) this._observer.disconnect();
+            this._observer = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    for (const node of m.addedNodes) {
+                        if (!(node instanceof Element)) continue;
+                        if (this._isMarketModalNode(node)) {
+                            this._scheduleUpdate(30);
+                            return;
+                        }
+                    }
+                    for (const node of m.removedNodes) {
+                        if (!(node instanceof Element)) continue;
+                        if (this._isMarketModalNode(node)) {
+                            this._cleanup();
+                            return;
+                        }
+                    }
+                    if (m.type === "attributes" && m.target instanceof Element) {
+                        if (this._isMarketModalNode(m.target)) {
+                            this._scheduleUpdate(30);
+                            return;
+                        }
+                    }
+                }
+            });
+            this._observer.observe(document.body, { childList: true, subtree: false });
+            const tryObserveMainPanel = () => {
+                const mainPanel = document.querySelector('[class*="MainPanel_mainPanel"]');
+                if (mainPanel) {
+                    this._observer.observe(mainPanel, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
+                    return true;
+                }
+                return false;
+            };
+            if (!tryObserveMainPanel()) {
+                let retries = 0;
+                const retryTimer = setInterval(() => {
+                    retries++;
+                    if (tryObserveMainPanel() || retries > 20) clearInterval(retryTimer);
+                }, 500);
+            }
+        },
+
+        /** 判断节点是否为市场弹窗 */
+        _isMarketModalNode(node) {
+            if (!(node instanceof Element)) return false;
+            const cls = node.className || "";
+            if (typeof cls === "string") {
+                return cls.includes("marketplaceModal") || cls.includes("MarketplacePanel_marketplacePanel");
+            }
+            return false;
+        },
+
+        /** 延迟更新（去抖） */
+        _scheduleUpdate(delay) {
+            if (this._debounceTimer) clearTimeout(this._debounceTimer);
+            this._debounceTimer = setTimeout(() => {
+                this._debounceTimer = null;
+                this._poll();
+            }, delay);
+        },
+
+        /** 查找市场弹窗的父容器 */
+        _findModalContainer() {
+            const el = document.querySelector('[class*="MainPanel_subPanelContainer"][class*="marketplaceModal"]');
+            if (el && isVisible(el)) return el;
+            const el2 = document.querySelector('[class*="MainPanel_marketplaceModal"]');
+            if (el2 && isVisible(el2)) return el2;
+            return null;
+        },
+
+        /** 轮询检测市场面板状态并注入/更新导航条 */
+        _poll() {
+            if (!STATE.purchaseNavEnabled) {
+                this._cleanup();
+                return;
+            }
+            const hasActiveItems = [...STATE.cart.values()].some(r => r.quantity > 0 && !isCoinItem(r.itemId));
+            if (!hasActiveItems) {
+                this._cleanup();
+                return;
+            }
+
+            const marketPanel = findVisibleMarketplacePanel();
+            if (!marketPanel) {
+                this._cleanup();
+                return;
+            }
+
+            if (this._injectedNav && document.body.contains(this._injectedNav) && this._lastMarketPanel === marketPanel) {
+                this._syncPosition();
+                return;
+            }
+
+            this._lastMarketPanel = marketPanel;
+            this._injectNav();
+        },
+
+        /** 清理导航条 DOM */
+        _cleanup() {
+            if (this._injectedNav) {
+                this._injectedNav.remove();
+                this._injectedNav = null;
+            }
+            this._lastMarketPanel = null;
+        },
+
+        /** 同步导航条位置（跟随市场面板） */
+        _syncPosition() {
+            if (!this._injectedNav) return;
+            const container = this._findModalContainer();
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const nav = this._injectedNav;
+            nav.style.left = rect.left + "px";
+            nav.style.top = rect.bottom + "px";
+            nav.style.width = rect.width + "px";
+        },
+
+        /** 创建并注入采购导航条 DOM */
+        _injectNav() {
+            if (!STATE.purchaseNavEnabled) return;
+
+            document.querySelectorAll(".mwi-mm-purchase-nav").forEach(el => el.remove());
+
+            const cartItems = this._getCartItemsForNav();
+            if (cartItems.length === 0) return;
+
+            const container = this._findModalContainer();
+            if (!container) return;
+
+            const currentItemId = this._lastMarketPanel ? this._detectCurrentItem(this._lastMarketPanel) : "";
+            const nav = document.createElement("div");
+            nav.className = "mwi-mm-purchase-nav";
+
+            let html = `<div class="mwi-mm-nav-items">`;
+            for (const item of cartItems) {
+                const isCurrent = currentItemId && normalizeCartItemId(item.itemId) === normalizeCartItemId(currentItemId);
+                const iconHref = resolveItemIconHref(item);
+                const safeHref = escapeHtml(iconHref);
+                const statusCls = isCurrent ? "is-current" : "";
+                html += `<div class="mwi-mm-nav-item ${statusCls}" data-nav-item-id="${escapeHtml(item.itemId)}" title="${escapeHtml(item.name)} · ${t("nav_short", formatQty(item.quantity))}">`;
+                html += `<div class="mwi-mm-nav-item-icon">${safeHref ? `<svg viewBox="0 0 32 32" width="24" height="24"><use href="${safeHref}" xlink:href="${safeHref}"></use></svg>` : `<span style="font-size:11px;color:#6b7a90;">?</span>`}</div>`;
+                html += `<div class="mwi-mm-nav-item-info"><div class="mwi-mm-nav-item-name">${escapeHtml(item.name)}</div>`;
+                html += `<div class="mwi-mm-nav-item-qty">${t("nav_short", formatQty(item.quantity))}</div>`;
+                html += `</div></div>`;
+            }
+            html += `</div>`;
+            nav.innerHTML = html;
+
+            nav.addEventListener("click", (e) => {
+                const itemEl = e.target.closest("[data-nav-item-id]");
+                if (!itemEl) return;
+                const itemId = itemEl.getAttribute("data-nav-item-id");
+                if (!itemId) return;
+                openMarketplaceForItem(itemId);
+                nav.querySelectorAll(".mwi-mm-nav-item").forEach(el => el.classList.remove("is-current"));
+                itemEl.classList.add("is-current");
+            });
+
+            document.body.appendChild(nav);
+            this._injectedNav = nav;
+            this._syncPosition();
+        },
+
+        /** 获取购物车中有缺料的物品列表（用于导航条显示） */
+        _getCartItemsForNav() {
+            const items = [];
+            for (const [id, row] of STATE.cart) {
+                if (!row || !row.itemId || isCoinItem(id)) continue;
+                if (row.quantity <= 0) continue;
+                items.push({ itemId: row.itemId, name: resolveCartDisplayName(row), iconRef: row.iconRef || "", quantity: row.quantity });
+            }
+            items.sort((a, b) => a.name.localeCompare(b.name, _getLocale()));
+            return items;
+        },
+
+        /** 检测当前市场页面显示的物品 ID */
+        _detectCurrentItem(container) {
+            const useEls = container.querySelectorAll('svg use[href*="items_sprite"]');
+            for (const use of useEls) {
+                const href = use.getAttribute("href") || "";
+                if (href.includes("#") && !href.includes("coin")) return href.split("#").pop();
+            }
+            return "";
+        },
+
+        // ── v1.4.1: 购齐内联横幅（替代自动跳转） ──────────────
+        _bannerTimer: null,
+
+        /** 在导航栏顶部显示「已购齐 → 采购下一个」横幅 */
+        _showFulfilledBanner(removedNames, nextItem) {
+            if (!STATE.purchaseNavEnabled) return;
+            // 清除旧横幅
+            document.querySelectorAll(".mwi-mm-nav-banner").forEach(el => el.remove());
+            if (this._bannerTimer) { clearTimeout(this._bannerTimer); this._bannerTimer = null; }
+
+            // 先重建导航栏（已购齐物品会从列表中移除）
+            this._injectNav();
+
+            let targetNav = this._injectedNav;
+
+            // 全部购齐时 _injectNav 会因 cartItems 为空而不创建导航栏
+            // 此时需要创建一个临时容器来承载「全部购齐」横幅
+            if (!targetNav || !document.body.contains(targetNav)) {
+                if (nextItem) return; // 还有待购项但导航栏不存在，跳过
+                const container = this._findModalContainer();
+                if (!container) return;
+                targetNav = document.createElement("div");
+                targetNav.className = "mwi-mm-purchase-nav";
+                document.body.appendChild(targetNav);
+                this._injectedNav = targetNav;
+                this._syncPosition();
+            }
+
+            const banner = document.createElement("div");
+            banner.className = "mwi-mm-nav-banner";
+
+            const nameStr = removedNames.length > 0 ? removedNames[0] : "";
+
+            if (!nextItem) {
+                // 全部购齐
+                banner.innerHTML = `<div class="mwi-mm-nav-banner-inner mwi-mm-nav-banner-alldone">` +
+                    `<span class="mwi-mm-nav-banner-icon">🎉</span>` +
+                    `<span class="mwi-mm-nav-banner-text">${escapeHtml(t("nav_all_done"))}</span>` +
+                    `</div>`;
+            } else {
+                // 单品购齐 → 显示下一个按钮（需用户手动点击，满足 1:1）
+                const nextName = resolveCartDisplayName(nextItem);
+                const nextQty = formatQty(nextItem.quantity);
+
+                banner.innerHTML = `<div class="mwi-mm-nav-banner-inner">` +
+                    `<span class="mwi-mm-nav-banner-icon">✅</span>` +
+                    `<span class="mwi-mm-nav-banner-done">${escapeHtml(t("nav_item_done", nameStr))}</span>` +
+                    `<span class="mwi-mm-nav-banner-sep">·</span>` +
+                    `<span class="mwi-mm-nav-banner-next-label">${escapeHtml(t("nav_next_label", nextName, nextQty))}</span>` +
+                    `<button class="mwi-mm-nav-next-btn" data-next-item-id="${escapeHtml(nextItem.itemId)}">${escapeHtml(t("nav_next_btn"))}</button>` +
+                    `</div>`;
+
+                banner.querySelector(".mwi-mm-nav-next-btn").addEventListener("click", (e) => {
+                    const itemId = e.currentTarget.getAttribute("data-next-item-id");
+                    if (itemId) openMarketplaceForItem(itemId);
+                    banner.style.opacity = "0";
+                    banner.style.transform = "translateY(-6px)";
+                    setTimeout(() => banner.remove(), 250);
+                });
+            }
+
+            targetNav.insertBefore(banner, targetNav.firstChild);
+
+            // 自动淡出（不自动跳转，仅淡出提示）
+            const fadeDelay = nextItem ? 12000 : 5000;
+            this._bannerTimer = setTimeout(() => {
+                if (banner.parentNode) {
+                    banner.style.opacity = "0";
+                    banner.style.transform = "translateY(-6px)";
+                    setTimeout(() => {
+                        banner.remove();
+                        // 全部购齐时淡出后清理临时容器
+                        if (!nextItem && targetNav.parentNode && !targetNav.querySelector(".mwi-mm-nav-items")) {
+                            targetNav.remove();
+                            if (this._injectedNav === targetNav) this._injectedNav = null;
+                        }
+                    }, 300);
+                }
+                this._bannerTimer = null;
+            }, fadeDelay);
+        }
+    };
+
+    // ── CSS ───────────────────────────────────────────────────────
+
+    /** 注入插件所有 CSS 样式 */
+    function injectStyles() {
+        const style = document.createElement("style");
+        style.textContent = `[data-mm-badge]::after{content:attr(data-mm-badge);margin-left:6px;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;display:inline-block;line-height:1.5;vertical-align:middle}[data-mm-badge-type="missing"]::after{color:#e88e98;background:rgba(180,50,70,.18)}[data-mm-badge-type="ok"]::after{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15)}.mwi-mm-upgrade-badge{margin-left:8px;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;display:inline-block;line-height:1.5}.mwi-mm-upgrade-badge.is-missing{color:#e88e98;background:rgba(180,50,70,.18)}.mwi-mm-upgrade-badge.is-ok{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15)}.mwi-mm-upgrade-inline{margin-top:4px;display:inline-block;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;line-height:1.5}.mwi-mm-upgrade-inline.is-missing{color:#e88e98;background:rgba(180,50,70,.18);border:none}.mwi-mm-upgrade-inline.is-ok{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15);border:none}.mwi-mm-summary-panel{margin:6px 0 2px;padding:10px 2px 0;border-radius:0;background:transparent!important;border:none!important;border-top:1px solid rgba(255,255,255,.06)!important;color:inherit!important;font-size:13px;box-shadow:none}.mwi-mm-summary-head{display:flex;justify-content:center;align-items:center;margin-bottom:6px}.mwi-mm-summary-head .stat{color:rgba(255,255,255,.55)!important;font-size:12px;font-weight:500}.mwi-mm-manual-count-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 4px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:6px}.mwi-mm-manual-label{color:rgba(255,255,255,.7)!important;font-size:12px;font-weight:500;white-space:nowrap;flex-shrink:0}.mwi-mm-manual-input{width:90px;padding:3px 6px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:13px;font-weight:600;outline:none;transition:border-color .2s;-moz-appearance:textfield}.mwi-mm-manual-input::-webkit-inner-spin-button,.mwi-mm-manual-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.mwi-mm-manual-input:focus{border-color:rgba(99,140,255,.6)}.mwi-mm-summary-buttons{margin-top:4px;display:flex;gap:8px}.mwi-mm-summary-buttons button{flex:1;cursor:pointer}#mwi-mm-cart-tab{position:fixed;left:calc(100vw - 70px);top:42vh;z-index:2147482200;width:52px;height:52px;border:1px solid #3a3a45;background:rgba(30,30,36,.96);color:#c8cfde;border-radius:14px;padding:0;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;cursor:pointer;isolation:isolate;box-shadow:0 8px 22px rgba(0,0,0,.45);transition:border-color .2s,color .2s,box-shadow .2s,background-color .2s}#mwi-mm-cart-tab::after{content:"";position:absolute;inset:0;border-radius:14px;background:transparent;box-shadow:0 0 12px 2px #fff;z-index:-1;opacity:.1;pointer-events:none;animation:mwi-mm-fab-breathe 6.2s ease-in-out infinite}#mwi-mm-cart-tab.is-open{border-color:#5b8cff;color:#f0f5ff;background:rgba(34,40,54,.98)}#mwi-mm-cart-tab.is-open::after{opacity:.16}@keyframes mwi-mm-fab-breathe{0%{transform:scale(1);opacity:.05}50%{transform:scale(1.02);opacity:.12}100%{transform:scale(1);opacity:.05}}#mwi-mm-cart-tab:active{cursor:grabbing}#mwi-mm-cart-tab .mwi-mm-fab-icon{width:24px;height:24px;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;fill:none}#mwi-mm-cart-tab .mwi-mm-fab-badge{position:absolute;right:-6px;top:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;border:1px solid rgba(0,0,0,.45);font-size:10px;font-weight:700;line-height:1;display:none;align-items:center;justify-content:center}#mwi-mm-cart-drawer{position:fixed;left:calc(100vw - 406px);top:8%;width:390px;max-width:calc(100vw - 20px);max-height:84vh;z-index:2147482201;background:#1b1d24;color:#e4e6ee;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 18px 36px rgba(0,0,0,.56);overflow:hidden;display:none;flex-direction:column;font-family:"Microsoft YaHei","PingFang SC",sans-serif}#mwi-mm-cart-drawer.is-resizing{user-select:none;transition:none!important}.mwi-mm-cart-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid #2e323d;background:#20232d;user-select:none;cursor:grab;touch-action:none;flex-shrink:0;position:relative}.mwi-mm-cart-head:active{cursor:grabbing}.mwi-mm-close-btn{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:6px;padding:3px 5px;flex-shrink:0;white-space:nowrap;font-size:11px;transition:color .2s,background-color .2s,border-color .2s}.mwi-mm-close-btn:hover{color:#edf2ff;background:rgba(148,163,184,.18);border-color:#555a72}.mwi-mm-cart-head .title{font-size:14px;font-weight:600;letter-spacing:.5px;color:#fff;white-space:nowrap}.mwi-mm-cart-head .ops{display:flex;flex-wrap:wrap;gap:4px}.mwi-mm-cart-head .ops button{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;white-space:nowrap;transition:color .2s,border-color .2s,background-color .2s}.mwi-mm-cart-head .ops button:hover{background:rgba(148,163,184,.18);color:#edf2ff}.mwi-mm-cart-head .ops button[data-act="toggle-settings"].is-on{border-color:rgba(91,140,255,.5);background:rgba(91,140,255,.18);color:#b9ccff}.mwi-mm-settings-panel{padding:0;background:rgba(255,255,255,.015);min-height:0;flex:1;overflow:hidden;display:none;flex-direction:column}.mwi-mm-settings-scroll{flex:1;min-height:0;overflow-y:auto;padding:8px 10px}.mwi-mm-settings-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.04)}.mwi-mm-settings-row:last-child{border-bottom:none}.mwi-mm-settings-info{flex:1;min-width:0}.mwi-mm-settings-label{font-size:12.5px;font-weight:600;color:#e4e6ee;line-height:1.4}.mwi-mm-settings-desc{font-size:10.5px;color:#6b7280;line-height:1.45;margin-top:1px}.mwi-mm-toggle-btn{flex-shrink:0;min-width:36px;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid;transition:all .2s;text-align:center}.mwi-mm-toggle-btn.is-on{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.18);color:#86efac}.mwi-mm-toggle-btn.is-off{border-color:rgba(120,129,145,.45);background:rgba(120,129,145,.1);color:#8b90a8}.mwi-mm-toggle-btn:hover{filter:brightness(1.15)}.mwi-mm-select{flex-shrink:0;min-width:80px;padding:3px 6px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(120,129,145,.45);background:rgba(120,129,145,.1);color:#c8cfde;outline:none;transition:all .2s;font-family:inherit}.mwi-mm-select:hover{border-color:rgba(91,140,255,.4);background:rgba(91,140,255,.08)}.mwi-mm-select:focus{border-color:rgba(91,140,255,.6)}.mwi-mm-select option{background:#1b1d24;color:#e4e6ee}.mwi-mm-chain-btn{position:absolute;right:-2px;top:-2px;width:16px;height:16px;border:1px solid rgba(99,140,255,.4);background:rgba(99,140,255,.12);color:#93c5fd;border-radius:3px;font-size:8px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:5;transition:all .15s}.mwi-mm-chain-btn:hover{background:rgba(99,140,255,.25);border-color:rgba(99,140,255,.6);color:#fff}.mwi-mm-chain-tree{margin:6px 0;padding:4px 0;border-top:1px dashed rgba(255,255,255,.06);border-bottom:1px dashed rgba(255,255,255,.06);font-size:12.5px;max-height:280px;overflow-y:auto;text-align:left}.mwi-mm-chain-title{font-size:12.5px;font-weight:600;color:#93c5fd;padding:2px 4px 4px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#1b1d24;z-index:1}.mwi-mm-chain-toggle{border:1px solid rgba(99,140,255,.3);background:rgba(99,140,255,.1);color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;transition:all .15s;line-height:1.4}.mwi-mm-chain-toggle:hover{background:rgba(99,140,255,.22);border-color:rgba(99,140,255,.5)}.mwi-mm-chain-body{width:100%;border-collapse:collapse;font-size:12.5px}.mwi-mm-chain-step-head td{padding:5px 4px 2px;font-weight:600;color:#c8cfde;font-size:12.5px}.mwi-mm-chain-row td{padding:2px 4px}.mwi-mm-chain-row td.mwi-mm-chain-name{padding-left:18px;color:#e4e6ee}.mwi-mm-chain-row td.mwi-mm-chain-qty{color:#f8c86b;font-weight:600;text-align:right;white-space:nowrap;width:50px;font-variant-numeric:tabular-nums}.mwi-mm-chain-row td.mwi-mm-chain-stock{text-align:right;white-space:nowrap;width:52px;font-size:11px;font-variant-numeric:tabular-nums}.mwi-mm-chain-row.is-missing td.mwi-mm-chain-stock{color:#e88e98}.mwi-mm-chain-row.is-ok td.mwi-mm-chain-stock{color:rgba(110,200,150,.7)}.mwi-mm-chain-upgrade{font-size:10px;color:#fbbf24;background:rgba(251,191,36,.12);padding:1px 4px;border-radius:2px;margin-left:4px}.mwi-mm-chain-craftable{color:#60a5fa;font-size:9px;margin-left:1px}.mwi-mm-quest-panel{padding:0 8px;border-bottom:1px solid #2e323d;max-height:200px;overflow-y:auto}.mwi-mm-quest-title{font-size:12px;font-weight:600;color:#93c5fd;padding:6px 0 4px;display:flex;align-items:center;gap:4px}.mwi-mm-quest-empty{color:#6b7280;text-align:center;padding:8px;font-size:11px}.mwi-mm-quest-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:3px}.mwi-mm-quest-row:last-child{border-bottom:none}.mwi-mm-quest-info{display:flex;justify-content:space-between;align-items:center}.mwi-mm-quest-name{font-size:12px;color:#e4e6ee;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-mm-quest-progress{font-size:11px;color:#f8c86b;font-weight:600;flex-shrink:0;margin-left:6px}.mwi-mm-quest-bar{height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}.mwi-mm-quest-bar-fill{height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:2px;transition:width .3s}.mwi-mm-quest-ops{display:flex;gap:4px}.mwi-mm-quest-ops button{flex:1;padding:2px 4px;border:1px solid #3a3a45;background:rgba(148,163,184,.08);color:#a7adbc;border-radius:4px;font-size:10px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}.mwi-mm-quest-ops button:hover{background:rgba(148,163,184,.18);color:#edf2ff;border-color:#555a72}.quest-toggle-btn{border:1px solid #3a3a45!important;background:rgba(148,163,184,.1)!important;color:#a7adbc!important;border-radius:6px!important;padding:3px 5px!important;cursor:pointer!important;display:flex!important;align-items:center;justify-content:center;transition:all .2s!important}.quest-toggle-btn:hover{background:rgba(148,163,184,.18)!important;color:#edf2ff!important}.quest-toggle-btn.is-on{border-color:rgba(91,140,255,.5)!important;background:rgba(91,140,255,.18)!important;color:#b9ccff!important}.mwi-mm-cart-search-row{padding:6px 8px;border-bottom:1px solid #2e323d;flex-shrink:0}.mwi-mm-cart-search{width:100%;padding:5px 10px;border:1px solid #2e324a;border-radius:6px;background:#0d0f17;color:#c0c8d8;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s}.mwi-mm-cart-search::placeholder{color:#555a72}.mwi-mm-cart-search:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-cart-list{padding:6px 8px;flex:1;min-height:0;max-height:${CART_LIST_MAX_HEIGHT_DEFAULT}px;overflow:auto}#mwi-mm-cart-drawer.has-custom-size .mwi-mm-cart-list{max-height:none}.mwi-mm-cart-empty{color:#6b7280;text-align:center;padding:18px 6px;border:1px dashed #3a3a45;border-radius:8px;font-size:12px}.mwi-mm-cart-row{border:1px solid #2f323d;background:transparent;border-radius:8px;padding:6px 8px;margin-bottom:4px;display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:6px;transition:background-color .2s,border-color .2s}.mwi-mm-cart-row:hover{background-color:rgba(255,255,255,.02)}.mwi-mm-cart-row.is-target{border:2px solid #6f778c;box-shadow:0 0 0 1px rgba(111,119,140,.28);background:transparent}.mwi-mm-cart-row .icon-btn{width:40px;height:40px;border-radius:6px;border:1px solid #3a3a45;background:#2c2c35;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:border-color .2s,color .2s}.mwi-mm-cart-row .icon-btn:hover{border-color:#6b8cff}.mwi-mm-item-icon{width:28px;height:28px}.mwi-mm-icon-fallback{color:#8b8b9e;font-weight:700;font-size:13px}.mwi-mm-cart-row .meta{min-width:0;display:flex;flex-direction:column;gap:2px}.mwi-mm-cart-row .meta .name{color:#fff;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;min-width:0}.mwi-mm-cart-row .meta .name-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-mm-star-btn{flex-shrink:0;width:18px;height:18px;border:none;background:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:transform .15s}.mwi-mm-star-btn svg{fill:#3a3d4a;stroke:#555a72;stroke-width:1.5;transition:fill .2s,stroke .2s}.mwi-mm-star-btn:hover svg{fill:rgba(250,204,21,.25);stroke:#facc15}.mwi-mm-star-btn.is-starred svg{fill:#facc15;stroke:#facc15}.mwi-mm-star-btn:active{transform:scale(1.2)}.mwi-mm-cart-row .meta .qty{color:#9aa3b5;font-size:11px;line-height:1.35;letter-spacing:.1px;display:flex;align-items:center;gap:4px}.mwi-mm-qty-input{width:64px;padding:1px 4px;border:1px solid rgba(255,255,255,.12);border-radius:3px;background:rgba(0,0,0,.2);color:#f8c86b;font-weight:700;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s,background-color .2s;-moz-appearance:textfield}.mwi-mm-qty-input::-webkit-inner-spin-button,.mwi-mm-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.mwi-mm-qty-input:hover{border-color:rgba(255,255,255,.22)}.mwi-mm-qty-input:focus{border-color:rgba(91,140,255,.5);background:rgba(0,0,0,.35)}.mwi-mm-cart-row .ops{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:68px}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button{border-radius:5px;padding:3px 6px;font-size:11px;border:1px solid #3a3a45!important;background:#232834!important;color:#c7cfdd!important;cursor:pointer;transition:all .2s;min-width:0;font-weight:500}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.market-btn{border:1px solid #1e5a32!important;background:#143220!important;color:#a5d6a7!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.market-btn:hover{background:#1b452b!important;color:#fff!important;border-color:#277841!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.remove-btn{border:1px solid #6e2a30!important;background:#3b1b1e!important;color:#e59b9b!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.remove-btn:hover{background:#502125!important;color:#fff!important;border-color:#933840!important}.mwi-mm-market-target{outline:2px solid rgba(245,158,11,.9);outline-offset:1px;box-shadow:0 0 0 2px rgba(245,158,11,.28);border-radius:8px;animation:mwi-mm-pulse 1.4s ease-in-out infinite}@keyframes mwi-mm-pulse{0%{box-shadow:0 0 0 1px rgba(245,158,11,.15)}50%{box-shadow:0 0 0 3px rgba(245,158,11,.45)}100%{box-shadow:0 0 0 1px rgba(245,158,11,.15)}}.mwi-mm-toast{position:fixed;top:12px;right:12px;z-index:2147483300;padding:7px 10px;border-radius:8px;border:1px solid rgba(71,85,105,.8);color:#e2e8f0;background:rgba(15,23,42,.95);font-size:12px;transition:all .25s;box-shadow:0 10px 20px rgba(0,0,0,.35)}.mwi-mm-toast-success{border-color:rgba(16,185,129,.85);color:#d1fae5}.mwi-mm-toast-error{border-color:rgba(239,68,68,.85);color:#fecaca}.mwi-mm-resize-handle{position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;user-select:none;z-index:10;border-radius:0 0 12px 0}.mwi-mm-resize-handle::before{content:"";position:absolute;right:4px;bottom:4px;width:10px;height:10px;border-right:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);border-radius:0 0 2px 0;transition:border-color .2s}.mwi-mm-resize-handle:hover::before{border-right-color:rgba(255,255,255,.45);border-bottom-color:rgba(255,255,255,.45)}.mwi-mm-resize-handle:active::before{border-right-color:#5b8cff;border-bottom-color:#5b8cff}.mwi-mm-cart-head .ops button.pick-inv-btn{border-color:#2d6a4f;background:rgba(45,106,79,.18);color:#95d5b2}.mwi-mm-cart-head .ops button.pick-inv-btn:hover{background:rgba(45,106,79,.32);color:#fff}.mwi-mm-cart-head .ops button.pick-inv-btn.is-picking{border-color:#f59e0b;background:rgba(245,158,11,.22);color:#fcd34d;animation:mwi-mm-pick-pulse 1.2s ease-in-out infinite}@keyframes mwi-mm-pick-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}50%{box-shadow:0 0 0 3px rgba(245,158,11,.25)}}.mwi-mm-pick-mode [class*="Inventory_inventory"] [class*="Item_itemContainer"]{cursor:crosshair!important}.mwi-mm-pick-selected{outline:2px solid rgba(34,197,94,.9)!important;outline-offset:-1px;box-shadow:0 0 0 3px rgba(34,197,94,.25)!important;border-radius:6px;position:relative}.mwi-mm-pick-selected::after{content:"✓";position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#22c55e;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}.mwi-mm-pick-status-bar{position:fixed;bottom:0;left:0;right:0;z-index:2147483400;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 20px;background:rgba(15,23,42,.95);border-top:1px solid rgba(245,158,11,.5);backdrop-filter:blur(8px);font-size:13px;color:#e2e8f0}.mwi-mm-pick-status-text strong{color:#fcd34d;font-size:15px}.mwi-mm-pick-cancel-btn{padding:4px 14px;border:1px solid #6e2a30;background:#3b1b1e;color:#e59b9b;border-radius:6px;font-size:12px;cursor:pointer}.mwi-mm-pick-cancel-btn:hover{background:#502125;color:#fff}.mwi-mm-pick-modal{position:fixed;inset:0;z-index:2147483500;display:flex;align-items:center;justify-content:center}.mwi-mm-pick-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.mwi-mm-pick-modal-content{position:relative;width:340px;max-width:calc(100vw - 32px);max-height:80vh;background:#1b1d24;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}.mwi-mm-pick-modal-head{padding:14px 16px 10px;border-bottom:1px solid #2e323d}.mwi-mm-pick-modal-head .title{font-size:15px;font-weight:600;color:#fff}.mwi-mm-pick-modal-head .subtitle{font-size:11px;color:#6b7280;margin-top:2px}.mwi-mm-pick-modal-list{flex:1;min-height:0;overflow-y:auto;padding:8px 12px}.mwi-mm-pick-row{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04)}.mwi-mm-pick-row:last-child{border-bottom:none}.mwi-mm-pick-row-icon{width:28px;height:28px;flex-shrink:0}.mwi-mm-pick-row-icon .mwi-mm-item-icon{width:28px;height:28px}.mwi-mm-pick-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e4e6ee;font-size:13px}.mwi-mm-pick-qty{width:52px;padding:3px 6px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:13px;font-weight:600;text-align:center;outline:none;flex-shrink:0}.mwi-mm-pick-qty:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-pick-remove{width:22px;height:22px;border:none;background:rgba(239,68,68,.15);color:#f87171;border-radius:4px;font-size:12px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}.mwi-mm-pick-remove:hover{background:rgba(239,68,68,.35);color:#fff}.mwi-mm-pick-modal-foot{padding:10px 14px;border-top:1px solid #2e323d;display:flex;justify-content:flex-end;gap:6px}.mwi-mm-pick-modal-foot button{flex:1;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid;white-space:nowrap}.mwi-mm-pick-confirm-btn{border-color:#22c55e!important;background:rgba(34,197,94,.18)!important;color:#86efac!important}.mwi-mm-pick-confirm-btn:hover{background:rgba(34,197,94,.32)!important;color:#fff!important}.mwi-mm-pick-back-btn{border-color:#3a3a45!important;background:rgba(148,163,184,.1)!important;color:#a7adbc!important}.mwi-mm-pick-back-btn:hover{background:rgba(148,163,184,.18)!important;color:#edf2ff!important}.mwi-mm-cart-row.is-fulfilled{opacity:.45;border-color:#1e3a2a;background:rgba(52,211,153,.03)}.mwi-mm-fulfilled-tag{font-size:11px;color:#34d399;font-weight:500}.mwi-mm-qty-input.mwi-mm-qty-fulfilled{width:40px;opacity:.4;font-size:12px}.mwi-mm-qty-input.mwi-mm-qty-fulfilled:focus{opacity:1;width:64px}.mwi-mm-cart-row.is-monitoring{border-color:rgba(96,165,250,.25)}.mwi-mm-cart-row.is-refilled{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.04);animation:mwi-mm-refill-pulse .6s ease}@keyframes mwi-mm-refill-pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.3)}50%{box-shadow:0 0 0 4px rgba(245,158,11,.1)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}.mwi-mm-refill-tag{font-size:11px;color:#fbbf24;font-weight:500;margin-left:4px}.mwi-mm-threshold-line{font-size:10.5px;color:#6b7a90;display:flex;align-items:center;gap:4px;margin-top:1px;cursor:pointer;transition:color .2s}.mwi-mm-threshold-line:hover{color:#9aa3b5}.mwi-mm-th-icon{width:12px;height:12px;fill:none;stroke:#60a5fa;stroke-width:2;flex-shrink:0}.mwi-mm-th-val{color:#7cacf8;font-weight:600}.mwi-mm-th-stock{color:#6b7a90}.mwi-mm-th-ok{color:#34d399}.mwi-mm-th-low{color:#fbbf24}.mwi-mm-set-threshold-btn{border:none;background:none;color:#4a7adb;font-size:10.5px;cursor:pointer;padding:0;font-family:inherit;transition:color .2s;text-align:left}.mwi-mm-set-threshold-btn:hover{color:#7cacf8}.mwi-mm-th-modal{position:fixed;inset:0;z-index:2147483500;display:flex;align-items:center;justify-content:center}.mwi-mm-th-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.mwi-mm-th-modal-content{position:relative;width:300px;max-width:calc(100vw - 32px);background:#1b1d24;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}.mwi-mm-th-modal-head{padding:14px 16px 10px;border-bottom:1px solid #2e323d}.mwi-mm-th-modal-head .title{font-size:15px;font-weight:600;color:#fff}.mwi-mm-th-modal-head .subtitle{font-size:11px;color:#6b7280;margin-top:2px}.mwi-mm-th-modal-body{padding:14px 16px}.mwi-mm-th-modal-desc{font-size:11.5px;color:#6b7a90;line-height:1.5;margin-bottom:12px}.mwi-mm-th-modal-field{display:flex;align-items:center;gap:8px;margin-bottom:8px}.mwi-mm-th-modal-field label{font-size:13px;color:#c7cfdd;white-space:nowrap;font-weight:500}.mwi-mm-th-modal-input{flex:1;max-width:120px;padding:6px 8px;border:1px solid rgba(255,255,255,.15);border-radius:6px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:14px;font-weight:600;font-family:inherit;outline:none;text-align:center}.mwi-mm-th-modal-input:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-th-modal-unit{font-size:12px;color:#6b7a90}.mwi-mm-th-modal-preview{font-size:11px;color:#555a72;min-height:16px;line-height:1.5}.mwi-mm-th-modal-foot{padding:10px 14px;border-top:1px solid #2e323d;display:flex;justify-content:flex-end;gap:6px}.mwi-mm-th-modal-foot button{padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;font-family:inherit;white-space:nowrap;transition:all .2s}.mwi-mm-th-modal-foot button:hover{background:rgba(148,163,184,.2);color:#edf2ff}.mwi-mm-th-modal-foot button.primary{border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.15);color:#93c5fd}.mwi-mm-th-modal-foot button.primary:hover{background:rgba(96,165,250,.25)}.mwi-mm-th-modal-clear{margin-right:auto!important;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-th-modal-clear:hover{background:rgba(239,68,68,.15)!important}.mwi-mm-clear-group{position:relative;display:inline-flex}.mwi-mm-clear-main{border-radius:6px 0 0 6px!important;border-right:none!important;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-clear-dd-toggle{border-radius:0 6px 6px 0!important;padding:3px 3px!important;min-width:18px;display:flex!important;align-items:center;justify-content:center;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-clear-main:hover,.mwi-mm-clear-dd-toggle:hover{background:rgba(239,68,68,.15)!important}.mwi-mm-clear-dropdown{position:absolute;top:calc(100% + 4px);right:0;background:#262a36;border:1px solid #3a3e4c;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);z-index:99;min-width:160px;padding:4px}.mwi-mm-clear-dropdown button{display:block;width:100%;text-align:left;border:none!important;background:none!important;color:#c7cfdd!important;font-size:12px;padding:7px 10px;border-radius:5px;cursor:pointer;transition:background .15s}.mwi-mm-clear-dropdown button:hover{background:rgba(255,255,255,.06)!important}.mwi-mm-clear-dropdown .dd-label{color:#e2e8f0;font-weight:500;font-size:12px}.mwi-mm-clear-dropdown .dd-desc{color:#6b7a90;font-size:11px;margin-top:2px}.mwi-mm-clear-dropdown .dd-danger .dd-label{color:#f87171!important}.mwi-mm-clear-dropdown .dd-divider{height:1px;background:#2e323d;margin:4px 6px}
+.mwi-mm-prefill-hint{display:flex;align-items:center;gap:5px;padding:2px 0;margin-bottom:2px;font-size:12px;color:#8a9aaa;line-height:1.4}.mwi-mm-prefill-hint b{color:#f8c86b;font-weight:600}.mwi-mm-prefill-tag{flex-shrink:0;padding:0px 5px;border-radius:3px;background:rgba(52,211,153,.15);color:#34d399;font-size:10px;font-weight:600}
+.mwi-mm-purchase-nav{position:fixed;z-index:802;border-top:1px solid rgba(255,255,255,.1);background:rgba(18,20,28,.97);padding:6px 14px;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.mwi-mm-nav-items{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.12) transparent}.mwi-mm-nav-items::-webkit-scrollbar{height:4px}.mwi-mm-nav-items::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}.mwi-mm-nav-item{flex-shrink:0;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);cursor:pointer;transition:all .2s}.mwi-mm-nav-item:hover{border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.04)}.mwi-mm-nav-item.is-current{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.08);box-shadow:0 0 0 1px rgba(245,158,11,.15)}.mwi-mm-nav-item-icon{width:24px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.mwi-mm-nav-item-icon svg{width:24px;height:24px}.mwi-mm-nav-item-info{min-width:0}.mwi-mm-nav-item-name{font-size:11px;font-weight:500;color:#e0e4f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px}.mwi-mm-nav-item-qty{font-size:9px;color:#f8c86b;font-weight:600}.mwi-mm-nav-item.is-current .mwi-mm-nav-item-name{color:#fff}.mwi-mm-nav-item.is-current .mwi-mm-nav-item-qty{color:#fcd34d}
+/* v1.4.1: 导航栏内联购齐横幅 */
+.mwi-mm-nav-banner{padding:0;overflow:hidden;transition:opacity .3s,transform .3s;animation:mwi-mm-banner-in .35s ease-out}.mwi-mm-nav-banner-inner{display:flex;align-items:center;gap:8px;padding:8px 10px;background:linear-gradient(90deg,rgba(52,211,153,.1),rgba(52,211,153,.02));border-bottom:1px solid rgba(52,211,153,.2);border-radius:8px 8px 0 0;flex-wrap:wrap}.mwi-mm-nav-banner-alldone{justify-content:center;background:linear-gradient(135deg,rgba(52,211,153,.1),rgba(34,211,238,.06));padding:12px 10px}.mwi-mm-nav-banner-icon{font-size:14px;flex-shrink:0}.mwi-mm-nav-banner-done{font-size:12px;color:#34d399;font-weight:600}.mwi-mm-nav-banner-sep{color:rgba(255,255,255,.15);font-size:10px}.mwi-mm-nav-banner-next-label{font-size:11px;color:#8a9aaa}.mwi-mm-nav-banner-text{font-size:14px;font-weight:700;color:#34d399}.mwi-mm-nav-next-btn{margin-left:auto;flex-shrink:0;padding:5px 14px;border-radius:6px;border:1px solid rgba(245,158,11,.35);background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(245,158,11,.08));color:#f59e0b;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:4px}.mwi-mm-nav-next-btn:hover{background:linear-gradient(135deg,rgba(245,158,11,.28),rgba(245,158,11,.15));border-color:rgba(245,158,11,.5);color:#fcd34d}@keyframes mwi-mm-banner-in{from{opacity:0;transform:translateY(-8px);max-height:0}to{opacity:1;transform:translateY(0);max-height:60px}}
+/* v1.3.5: 制作计划独立侧面板 */
+#mwi-mm-plans-panel{position:fixed;z-index:2147482200;width:260px;max-height:70vh;background:#1b1d24;color:#e4e6ee;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 18px 36px rgba(0,0,0,.56);overflow:hidden;display:none;flex-direction:column;font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:12px}
+.mwi-mm-plans-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #2e323d;background:#20232d;flex-shrink:0}
+.mwi-mm-plans-title{font-size:14px;font-weight:600;color:#fff;display:flex;align-items:center;gap:5px;letter-spacing:.5px}
+.mwi-mm-plans-icon{flex-shrink:0;stroke:#93c5fd}
+.mwi-mm-plans-count{color:#6b7a90;font-weight:500;font-size:12px}
+.mwi-mm-plans-head-ops{display:flex;gap:4px}
+.mwi-mm-plans-clear-btn{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;font-size:11px;cursor:pointer;padding:3px 6px;border-radius:6px;font-family:inherit;transition:all .15s;white-space:nowrap}
+.mwi-mm-plans-clear-btn:hover{color:#fca5a5;background:rgba(239,68,68,.12);border-color:#6e2a30}
+.mwi-mm-plans-close-btn{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;font-size:11px;cursor:pointer;padding:3px 5px;border-radius:6px;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.mwi-mm-plans-close-btn:hover{color:#edf2ff;background:rgba(148,163,184,.18);border-color:#555a72}
+.mwi-mm-plans-list{padding:6px 8px;flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+.mwi-mm-plan-card{padding:8px 10px;border:1px solid #2f323d;border-radius:8px;transition:border-color .2s,background-color .2s;background:transparent}
+.mwi-mm-plan-card:hover{background:rgba(255,255,255,.02)}
+.mwi-mm-plan-card.is-crafting{border-color:rgba(245,158,11,.3)}
+.mwi-mm-plan-card.is-stale{opacity:.5}
+.mwi-mm-plan-card-head{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.mwi-mm-plan-title-line{flex:1;min-width:0;display:flex;align-items:center;gap:4px}
+.mwi-mm-plan-name{font-size:12.5px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.mwi-mm-plan-count-wrap{font-size:12px;color:#93c5fd;font-weight:600;flex-shrink:0;display:flex;align-items:center}
+.mwi-mm-plan-count-input{width:64px;padding:1px 4px;border:1px solid rgba(255,255,255,.12);border-radius:3px;background:rgba(0,0,0,.2);color:#f8c86b;font-weight:700;font-size:14px;font-family:inherit;outline:none;text-align:center;transition:border-color .2s;-moz-appearance:textfield}
+.mwi-mm-plan-count-input::-webkit-inner-spin-button,.mwi-mm-plan-count-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.mwi-mm-plan-count-input:hover{border-color:rgba(255,255,255,.22)}
+.mwi-mm-plan-count-input:focus{border-color:rgba(91,140,255,.5);background:rgba(0,0,0,.35)}
+.mwi-mm-plan-remove{width:20px;height:20px;border:1px solid #3a3a45;background:rgba(148,163,184,.06);color:#555a72;border-radius:5px;font-size:11px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;transition:all .15s}
+.mwi-mm-plan-remove:hover{background:rgba(239,68,68,.18);color:#fca5a5;border-color:#6e2a30}
+.mwi-mm-plan-progress{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.mwi-mm-plan-progress-bar{flex:1;height:5px;border-radius:3px;overflow:hidden;position:relative;background:linear-gradient(90deg,#c05050,#c09940 50%,#40a865)}
+.mwi-mm-plan-progress-mask{position:absolute;right:0;top:0;bottom:0;background:#1e2436;border-radius:0 3px 3px 0;transition:width .3s}
+.mwi-mm-plan-progress-text{font-size:10px;color:#fbbf24;font-weight:600;flex-shrink:0}
+.mwi-mm-plan-status-tag{font-size:10px;color:#555a72;font-weight:500}
+.mwi-mm-plan-lock-divider{display:flex;align-items:center;gap:6px;margin:4px 0 3px;user-select:none}
+.mwi-mm-plan-lock-line{flex:1;height:1px;background:rgba(96,165,250,.18)}
+.mwi-mm-plan-lock-label{font-size:9px;color:rgba(96,165,250,.5);font-weight:600;letter-spacing:1px;white-space:nowrap;flex-shrink:0}
+.mwi-mm-plan-mats{display:flex;flex-direction:column;gap:1px}
+.mwi-mm-plan-mat-row{display:flex;align-items:center;gap:4px;font-size:11px;line-height:1.5;padding:1px 0}
+.mwi-mm-plan-mat-icon{font-size:10px;flex-shrink:0;width:14px;text-align:center}
+.mwi-mm-plan-mat-name{flex:1;min-width:0;color:#e4e6ee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mwi-mm-plan-mat-qty{flex-shrink:0;color:#60a5fa;font-weight:700;font-size:11px}
+.mwi-mm-plan-stale-hint{font-size:9px;color:#f59e0b;margin-top:4px;opacity:.7}
+/* 购物车头部的计划按钮 */
+.mwi-mm-cart-head .ops button.plans-toggle-btn{border-color:rgba(96,165,250,.35);background:rgba(96,165,250,.1);color:#93c5fd;font-size:11px;min-width:28px;display:flex;align-items:center;gap:3px}
+.mwi-mm-cart-head .ops button.plans-toggle-btn svg{stroke:currentColor;flex-shrink:0}
+.mwi-mm-cart-head .ops button.plans-toggle-btn:hover{background:rgba(96,165,250,.2);color:#b9d4ff}
+.mwi-mm-cart-head .ops button.plans-toggle-btn.is-on{border-color:rgba(96,165,250,.5);background:rgba(96,165,250,.2);color:#b9d4ff}`;
+        document.head.appendChild(style);
+    }
+
+    // ── 启动 ─────────────────────────────────────────────────────
+
+    /** 等待 document.body 可用 */
+    function waitForBody() {
+        return new Promise((resolve) => {
+            if (document.body) { resolve(); return; }
+            const timer = setInterval(() => { if (document.body) { clearInterval(timer); resolve(); } }, 50);
+        });
+    }
+
+    /** 插件主入口：初始化所有子系统并等待游戏就绪 */
+    async function init() {
+        await waitForBody();
+
+        setupWSInterceptor();
+
+        _wsInventory.onChange(() => {
+            triggerInventorySync(15);
+            scheduleRefresh(150);
+            updateWSStatusDisplay();
+        });
+
+        injectStyles();
+        _initSpriteBaseProbe(); // ★ 尽早启动 sprite 路径探测
+
+        try {
+            const sizeFormatVer = localStorage.getItem("mwi_missing_cart_size_format_v");
+            if (sizeFormatVer !== "2") { localStorage.setItem("mwi_missing_cart_size_format_v", "2"); localStorage.removeItem(SCRIPT.drawerSizeKey); }
+        } catch (e) { /* ignore */ }
+
+        loadCart();
+        loadPlans();
+        loadToggles();
+        ensureCartDrawer();
+        setupObservers();
+
+
+        await waitForGameReady();
+        showFab();
+
+        _marketPrefill.init();
+        _purchaseNav.init();
+
+        const dataReady = await waitForClientData();
+        if (dataReady) {
+            _dataLayer.init();
+            updateWSStatusDisplay();
+            _questTracker.renderPanel(); // v1.4.3: 数据层就绪后渲染任务面板
+        } else {
+            console.warn("[mwi-mm] 游戏数据未就绪（localStorage/WS/Mooket 均不可用），使用 DOM 回退");
+        }
+
+        const wsLabel = _wsInventory.ready ? t("ws_exact") : t("ws_waiting");
+        const dlLabel = _dataLayer.ready ? t("dl_ok") : t("dl_fallback");
+        const srcLabel = _capturedClientData ? (_capturedClientData._src || t("cache")) : t("dl_fallback");
+        const plansLabel = STATE.craftingPlans.size > 0 ? t("plans_n", STATE.craftingPlans.size) : t("no_plans");
+        setAction(t("action_startup", "1.4.1", wsLabel, dlLabel, plansLabel, srcLabel));
+        scheduleRefresh(80);
+    }
+
+    init().catch((err) => {
+        console.error("[mwi-mm] init failed", err);
+    });
+})();
