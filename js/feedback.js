@@ -2,7 +2,6 @@
  * 功能建议页 — 提交逻辑
  */
 (function () {
-  // TODO: 部署后替换为你的 Worker 地址
   const API_BASE = "https://mwi-api-proxy.colacolamwi.workers.dev";
 
   // 从 URL 读取参数
