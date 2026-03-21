@@ -159,11 +159,23 @@
           nameHtml = escapeHtml(d.name);
         }
 
-        html += "<tr>";
+        // 留言：图片URL自动渲染为图片
+        var msgHtml;
+        var msg = (d.message || "").trim();
+        if (/^https?:\/\/.+\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(msg)) {
+          msgHtml = '<img src="' + escapeAttr(msg) + '" class="donor-msg-img">';
+        } else {
+          msgHtml = escapeHtml(msg);
+        }
+
+        // 有特效的行加整行扫光class
+        var rowClass = d.css ? ' class="donor-row-effect"' : "";
+
+        html += "<tr" + rowClass + ">";
         html += "<td>" + medal + "</td>";
         html += "<td>" + nameHtml + "</td>";
         html += '<td class="amount">\u00a5' + Number(d.amount).toFixed(2) + "</td>";
-        html += "<td>" + escapeHtml(d.message || "") + "</td>";
+        html += "<td>" + msgHtml + "</td>";
         html += "</tr>";
       });
 
@@ -186,14 +198,25 @@
     return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  // ── 注入动画关键帧（一次性，以后所有特效只需在 admin.py 改 CSS 字段） ──
+  // ── 注入动画与样式（一次性，以后所有特效只需在 admin.py 改 CSS 字段） ──
   var styleEl = document.createElement("style");
   styleEl.textContent = [
+    // 名字扫光
     "@keyframes donor-shine{0%{background-position:200% center}100%{background-position:-200% center}}",
+    // 呼吸发光
     "@keyframes donor-breathe{0%,100%{filter:drop-shadow(0 0 2px rgba(244,64,64,.35)) drop-shadow(0 0 2px rgba(244,64,64,.35))}50%{filter:drop-shadow(0 0 8px rgba(244,64,64,1)) drop-shadow(0 0 16px rgba(244,80,60,.6))}}",
+    // 整行扫光
+    "@keyframes row-shine{0%{background-position:-100% 0}40%{background-position:200% 0}100%{background-position:200% 0}}",
+    // 彩虹色相旋转
     "@keyframes donor-rainbow{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}",
+    // 缩放脉冲
     "@keyframes donor-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}",
+    // 文字发光
     "@keyframes donor-glow{0%,100%{text-shadow:0 0 4px currentColor}50%{text-shadow:0 0 16px currentColor,0 0 30px currentColor}}",
+    // 整行扫光样式
+    ".donor-row-effect{background:linear-gradient(90deg,transparent 0%,rgba(255,215,0,.12) 15%,rgba(255,200,0,.3) 40%,rgba(255,230,100,.45) 50%,rgba(255,200,0,.3) 60%,rgba(255,215,0,.12) 85%,transparent 100%);background-size:200% 100%;animation:row-shine 4s ease-in-out infinite}",
+    // 留言图片样式
+    ".donor-msg-img{max-height:36px;max-width:120px;border-radius:4px;vertical-align:middle}",
   ].join("\n");
   document.head.appendChild(styleEl);
 
