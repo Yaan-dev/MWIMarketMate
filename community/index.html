@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社区中心 — MWI Market Mate</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="community-wrapper">
+
+    <!-- ===== 左栏：建议区 ===== -->
+    <div class="community-col community-left">
+      <h1 id="title-feedback">💬 社区反馈</h1>
+      <p class="subtitle" id="subtitle-feedback">分享你的想法，帮助改进插件</p>
+
+      <!-- 提交表单 -->
+      <div class="card">
+        <form id="feedbackForm">
+          <div class="form-group">
+            <label id="labelText">建议内容 *</label>
+            <textarea id="text" maxlength="2000" placeholder="描述你希望添加的功能或改进..." required></textarea>
+            <div class="hint" id="charHint">最多 2000 字</div>
+          </div>
+          <div class="form-group">
+            <label id="labelNick">昵称（选填）</label>
+            <input type="text" id="nickname" maxlength="50" placeholder="你的游戏昵称或称呼">
+          </div>
+          <button type="submit" class="btn" id="submitBtn">提交建议</button>
+        </form>
+        <div id="msg" class="msg"></div>
+      </div>
+
+      <!-- 建议列表 -->
+      <div class="section-title" id="recentTitle">📋 最近反馈</div>
+      <div id="feedbackList">
+        <div class="loading" id="loadingFeedback">加载中...</div>
+      </div>
+    </div>
+
+    <!-- ===== 右栏：打赏区 ===== -->
+    <div class="community-col community-right">
+      <h1 id="title-donate">❤ 打赏作者</h1>
+      <p class="subtitle" id="subtitle-donate">感谢你的支持，这是我持续开发的动力！</p>
+
+      <!-- 收款二维码 -->
+      <div class="card" style="text-align:center;">
+        <div class="qr-card" style="display:inline-block;">
+          <img src="../donate/wechat.png" alt="WeChat Pay" style="max-width:180px">
+          <div class="qr-label" id="labelWechat">微信赞赏</div>
+        </div>
+      </div>
+
+      <!-- 打赏排行 -->
+      <div class="section-title" id="rankingTitle">🏆 打赏排行</div>
+      <div id="rankingContent">
+        <div class="loading" id="loadingDonors">加载中...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 返回首页 -->
+  <div class="footer" style="margin-top:40px;">
+    <a href="../">← <span id="backText">返回首页</span></a>
+  </div>
+
+  <script src="../js/community.js"></script>
+</body>
+</html>
