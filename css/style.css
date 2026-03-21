@@ -280,8 +280,9 @@ textarea {
 
 /* 金色扫光动画 */
 @keyframes donor-shine {
-  0%   { background-position: -100px center; }
-  100% { background-position: 200px center; }
+  0%   { background-position: -200px center; }
+  40%  { background-position: 300px center; }
+  100% { background-position: 300px center; }
 }
 
 .empty-ranking {
