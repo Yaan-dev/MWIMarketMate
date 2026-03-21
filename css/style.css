@@ -278,6 +278,12 @@ textarea {
   -webkit-background-clip: text;
 }
 
+/* 金色扫光动画 */
+@keyframes donor-shine {
+  0%   { background-position: -100px center; }
+  100% { background-position: 200px center; }
+}
+
 .empty-ranking {
   text-align: center;
   padding: 24px;
