@@ -3,17 +3,67 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MWI Market Mate</title>
+  <title>MWI Market Mate — 市场伴侣</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div class="container" style="text-align:center;">
+  <div class="landing-wrapper">
     <h1>MWI 市场伴侣</h1>
-    <p class="subtitle">MWI Market Mate</p>
-    <div style="display:flex;gap:12px;margin-top:24px;">
-      <a href="feedback/" class="btn" style="text-decoration:none;">💡 功能建议</a>
-      <a href="donate/" class="btn btn-donate" style="text-decoration:none;">❤ 打赏作者</a>
+    <div class="landing-subtitle">Market Mate — Milky Way Idle 制作辅助插件</div>
+    <div class="landing-version">当前版本 v1.4.3</div>
+
+    <!-- 主按钮 -->
+    <div class="landing-buttons">
+      <a href="https://greasyfork.org/zh-CN/scripts/529453" target="_blank" class="btn">📦 安装插件</a>
+      <a href="community/" class="btn btn-donate">💬 社区中心</a>
     </div>
+
+    <!-- 功能亮点 -->
+    <div class="section-title" style="text-align:left;">✨ 核心功能</div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🛒</div>
+        <div class="feature-title">智能购物清单</div>
+        <div class="feature-desc">自动计算缺料数量，一键生成采购清单</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <div class="feature-title">Z-score 安全边际</div>
+        <div class="feature-desc">基于概率模型的材料安全量计算</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🍵</div>
+        <div class="feature-title">工匠茶自动计算</div>
+        <div class="feature-desc">自动识别茶水减免，无需手动调整</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <div class="feature-title">升级链展示</div>
+        <div class="feature-desc">完整展示升级路径，支持步骤筛选</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <div class="feature-title">任务追踪</div>
+        <div class="feature-desc">自动追踪制作任务进度与材料需求</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <div class="feature-title">实时市场价格</div>
+        <div class="feature-desc">获取最新市场价格，计算总花费</div>
+      </div>
+    </div>
+
+    <!-- 最近更新 -->
+    <div class="changelog-section">
+      <div class="section-title">📝 最近更新 — v1.4.3</div>
+      <ul>
+        <li>新增余量标记，材料充足时显示蓝色「余 X」</li>
+        <li>升级链支持复选框筛选，自由选择要加入的步骤</li>
+        <li>金币不再参与工匠茶减免计算</li>
+        <li>新增社区反馈与打赏入口</li>
+      </ul>
+    </div>
+
     <div class="footer">
       <p>Made with ❤ by ColaCola</p>
     </div>
