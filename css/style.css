@@ -27,10 +27,23 @@ h1 {
 .subtitle {
   font-size: 13px;
   color: #6b7280;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
-/* 表单元素 */
+/* ══════════════════════════════════════
+   通用卡片
+   ══════════════════════════════════════ */
+.card {
+  border: 1px solid #2a2d37;
+  border-radius: 12px;
+  background: #1b1d24;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* ══════════════════════════════════════
+   表单元素
+   ══════════════════════════════════════ */
 label {
   display: block;
   font-size: 13px;
@@ -44,7 +57,7 @@ textarea, input[type="text"] {
   padding: 10px 12px;
   border: 1px solid #2a2d37;
   border-radius: 8px;
-  background: #1b1d24;
+  background: #161820;
   color: #e4e6ee;
   font-size: 14px;
   font-family: inherit;
@@ -57,12 +70,12 @@ textarea:focus, input[type="text"]:focus {
 }
 
 textarea {
-  min-height: 120px;
+  min-height: 100px;
   resize: vertical;
 }
 
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .hint {
@@ -71,7 +84,9 @@ textarea {
   margin-top: 4px;
 }
 
-/* 按钮 */
+/* ══════════════════════════════════════
+   按钮
+   ══════════════════════════════════════ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -88,6 +103,7 @@ textarea {
   cursor: pointer;
   font-family: inherit;
   transition: all 0.2s;
+  text-decoration: none;
 }
 
 .btn:hover {
@@ -113,7 +129,9 @@ textarea {
   color: #fff;
 }
 
-/* 消息提示 */
+/* ══════════════════════════════════════
+   消息提示
+   ══════════════════════════════════════ */
 .msg {
   padding: 10px 14px;
   border-radius: 8px;
@@ -136,11 +154,98 @@ textarea {
   color: #fca5a5;
 }
 
-/* 排行榜表格 */
+/* ══════════════════════════════════════
+   社区页 — 左右分栏布局
+   ══════════════════════════════════════ */
+.community-wrapper {
+  display: flex;
+  gap: 32px;
+  width: 100%;
+  max-width: 960px;
+  align-items: flex-start;
+}
+
+.community-col {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 移动端变为上下布局 */
+@media (max-width: 720px) {
+  .community-wrapper {
+    flex-direction: column;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+}
+
+/* ══════════════════════════════════════
+   反馈气泡卡片
+   ══════════════════════════════════════ */
+.fb-card {
+  border: 1px solid #2a2d37;
+  border-radius: 12px;
+  background: #1b1d24;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s;
+}
+
+.fb-card:hover {
+  border-color: rgba(91, 140, 255, 0.3);
+}
+
+.fb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.fb-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.fb-time {
+  font-size: 11px;
+  color: #555a72;
+}
+
+.fb-body {
+  font-size: 13px;
+  color: #d1d5db;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.fb-reply {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(52, 211, 153, 0.06);
+  border-left: 3px solid rgba(52, 211, 153, 0.4);
+  font-size: 13px;
+  color: #a7f3d0;
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.fb-reply-label {
+  font-weight: 600;
+  color: #6ee7b7;
+}
+
+/* ══════════════════════════════════════
+   排行榜表格
+   ══════════════════════════════════════ */
 .ranking-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 16px;
+  margin-top: 12px;
   font-size: 13px;
 }
 
@@ -154,7 +259,7 @@ textarea {
 }
 
 .ranking-table td {
-  padding: 8px 10px;
+  padding: 10px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: #e4e6ee;
 }
@@ -165,6 +270,14 @@ textarea {
 
 .amount { color: #f8c86b; font-weight: 600; }
 
+/* 打赏者名字特效容器 */
+.donor-name-effect {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 14px;
+  -webkit-background-clip: text;
+}
+
 .empty-ranking {
   text-align: center;
   padding: 24px;
@@ -172,7 +285,9 @@ textarea {
   font-size: 13px;
 }
 
-/* QR 码区域 */
+/* ══════════════════════════════════════
+   QR 码区域
+   ══════════════════════════════════════ */
 .qr-section {
   display: flex;
   gap: 16px;
@@ -202,7 +317,9 @@ textarea {
   color: #6b7280;
 }
 
-/* 页脚 */
+/* ══════════════════════════════════════
+   页脚
+   ══════════════════════════════════════ */
 .footer {
   margin-top: 32px;
   font-size: 11px;
@@ -217,7 +334,9 @@ textarea {
 
 .footer a:hover { color: #93c5fd; }
 
-/* 加载动画 */
+/* ══════════════════════════════════════
+   加载动画
+   ══════════════════════════════════════ */
 .loading {
   text-align: center;
   padding: 24px;
@@ -231,4 +350,120 @@ textarea {
   margin: 24px 0 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid #2a2d37;
+}
+
+/* ══════════════════════════════════════
+   落地页 — 功能卡片网格
+   ══════════════════════════════════════ */
+.landing-wrapper {
+  width: 100%;
+  max-width: 640px;
+  text-align: center;
+}
+
+.landing-wrapper h1 {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.landing-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.landing-version {
+  font-size: 12px;
+  color: #555a72;
+  margin-bottom: 24px;
+}
+
+.landing-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.landing-buttons .btn {
+  width: auto;
+  padding: 12px 24px;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  text-align: left;
+  margin-bottom: 28px;
+}
+
+.feature-card {
+  border: 1px solid #2a2d37;
+  border-radius: 10px;
+  background: #1b1d24;
+  padding: 14px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.feature-card:hover {
+  border-color: rgba(91, 140, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.feature-icon {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+
+.feature-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e6ee;
+  margin-bottom: 4px;
+}
+
+.feature-desc {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.changelog-section {
+  text-align: left;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.changelog-section ul {
+  list-style: none;
+  padding: 0;
+}
+
+.changelog-section li {
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 4px 0;
+  padding-left: 16px;
+  position: relative;
+}
+
+.changelog-section li::before {
+  content: "•";
+  position: absolute;
+  left: 4px;
+  color: #555a72;
+}
+
+@media (max-width: 520px) {
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .landing-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+  .landing-buttons .btn {
+    width: 100%;
+  }
 }
