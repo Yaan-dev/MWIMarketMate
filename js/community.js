@@ -216,7 +216,7 @@
     // 整行扫光样式
     ".donor-row-effect{background:linear-gradient(90deg,transparent 0%,rgba(212,165,60,.06) 20%,rgba(245,214,128,.18) 45%,rgba(212,165,60,.06) 80%,transparent 100%);background-size:300% 100%;animation:row-shine 6s linear infinite}",
     // 留言图片样式
-    ".donor-msg-img{max-height:36px;max-width:120px;border-radius:4px;vertical-align:middle}",
+    ".donor-msg-img{max-height:80px;max-width:200px;border-radius:6px;vertical-align:middle;padding:4px 0}",
   ].join("\n");
   document.head.appendChild(styleEl);
 
