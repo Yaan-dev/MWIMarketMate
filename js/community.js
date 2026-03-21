@@ -168,8 +168,8 @@
           msgHtml = escapeHtml(msg);
         }
 
-        // 有特效的行加整行扫光class
-        var rowClass = d.css ? ' class="donor-row-effect"' : "";
+        // 仅 CSS 中含 --row-shine:1 的行加整行扫光
+        var rowClass = (d.css && d.css.indexOf("--row-shine:1") !== -1) ? ' class="donor-row-effect"' : "";
 
         html += "<tr" + rowClass + ">";
         html += "<td>" + medal + "</td>";
