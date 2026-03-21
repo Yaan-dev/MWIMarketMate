@@ -206,7 +206,7 @@
     // 呼吸发光
     "@keyframes donor-breathe{0%,100%{filter:drop-shadow(0 0 2px rgba(244,64,64,.35)) drop-shadow(0 0 2px rgba(244,64,64,.35))}50%{filter:drop-shadow(0 0 8px rgba(244,64,64,1)) drop-shadow(0 0 16px rgba(244,80,60,.6))}}",
     // 整行扫光
-    "@keyframes row-shine{0%{background-position:-100% 0}40%{background-position:200% 0}100%{background-position:200% 0}}",
+    "@keyframes row-shine{0%{background-position:200% 0}100%{background-position:-200% 0}}",
     // 彩虹色相旋转
     "@keyframes donor-rainbow{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}",
     // 缩放脉冲
@@ -214,7 +214,7 @@
     // 文字发光
     "@keyframes donor-glow{0%,100%{text-shadow:0 0 4px currentColor}50%{text-shadow:0 0 16px currentColor,0 0 30px currentColor}}",
     // 整行扫光样式
-    ".donor-row-effect{background:linear-gradient(90deg,transparent 0%,rgba(255,215,0,.12) 15%,rgba(255,200,0,.3) 40%,rgba(255,230,100,.45) 50%,rgba(255,200,0,.3) 60%,rgba(255,215,0,.12) 85%,transparent 100%);background-size:200% 100%;animation:row-shine 4s ease-in-out infinite}",
+    ".donor-row-effect{background:linear-gradient(90deg,transparent 0%,rgba(212,165,60,.06) 20%,rgba(245,214,128,.18) 45%,rgba(212,165,60,.06) 80%,transparent 100%);background-size:300% 100%;animation:row-shine 6s linear infinite}",
     // 留言图片样式
     ".donor-msg-img{max-height:36px;max-width:120px;border-radius:4px;vertical-align:middle}",
   ].join("\n");
