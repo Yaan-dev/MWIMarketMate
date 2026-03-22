@@ -1,551 +1,236 @@
-/* MWI Market Mate — 前端共享样式 */
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/**
+ * 社区中心 — 建议列表 + 打赏排行 + 提交建议
+ */
+(function () {
+  const API_BASE = "https://api-mate.colacola.cloud";
 
-body {
-  font-family: "Microsoft YaHei", "PingFang SC", -apple-system, sans-serif;
-  background: #0f1117;
-  color: #e4e6ee;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px 16px;
-}
+  const params = new URLSearchParams(window.location.search);
+  const lang = params.get("lang") || "zh";
 
-.container {
-  width: 100%;
-  max-width: 480px;
-}
-
-h1 {
-  font-size: 22px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: #fff;
-}
-
-.subtitle {
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 20px;
-}
-
-/* ══════════════════════════════════════
-   通用卡片
-   ══════════════════════════════════════ */
-.card {
-  border: 1px solid #2a2d37;
-  border-radius: 12px;
-  background: #1b1d24;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-/* ══════════════════════════════════════
-   表单元素
-   ══════════════════════════════════════ */
-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #c8cfde;
-  margin-bottom: 6px;
-}
-
-textarea, input[type="text"] {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #2a2d37;
-  border-radius: 8px;
-  background: #161820;
-  color: #e4e6ee;
-  font-size: 14px;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-textarea:focus, input[type="text"]:focus {
-  border-color: rgba(91, 140, 255, 0.5);
-}
-
-textarea {
-  min-height: 100px;
-  resize: vertical;
-}
-
-.form-group {
-  margin-bottom: 14px;
-}
-
-.hint {
-  font-size: 11px;
-  color: #555a72;
-  margin-top: 4px;
-}
-
-/* ══════════════════════════════════════
-   按钮
-   ══════════════════════════════════════ */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 12px;
-  border: 1px solid rgba(91, 140, 255, 0.4);
-  border-radius: 8px;
-  background: rgba(91, 140, 255, 0.15);
-  color: #93c5fd;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.2s;
-  text-decoration: none;
-}
-
-.btn:hover {
-  background: rgba(91, 140, 255, 0.25);
-  border-color: rgba(91, 140, 255, 0.6);
-  color: #fff;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-donate {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
-}
-
-.btn-donate:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fff;
-}
-
-/* ══════════════════════════════════════
-   消息提示
-   ══════════════════════════════════════ */
-.msg {
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-top: 12px;
-  display: none;
-}
-
-.msg.success {
-  display: block;
-  border: 1px solid rgba(52, 211, 153, 0.5);
-  background: rgba(52, 211, 153, 0.08);
-  color: #6ee7b7;
-}
-
-.msg.error {
-  display: block;
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  background: rgba(239, 68, 68, 0.08);
-  color: #fca5a5;
-}
-
-/* ══════════════════════════════════════
-   社区页 — 左右分栏布局
-   ══════════════════════════════════════ */
-.community-wrapper {
-  display: flex;
-  gap: 32px;
-  width: 100%;
-  max-width: 960px;
-  align-items: flex-start;
-}
-
-.community-col {
-  flex: 1;
-  min-width: 0;
-}
-
-/* 移动端变为上下布局 */
-@media (max-width: 720px) {
-  .community-wrapper {
-    flex-direction: column;
-    max-width: 480px;
-    margin: 0 auto;
+  // ── 双语 ──
+  if (lang === "en") {
+    document.getElementById("title-feedback").textContent = "\ud83d\udcac Community Feedback";
+    document.getElementById("subtitle-feedback").textContent = "Share your ideas to help improve the plugin";
+    document.getElementById("labelText").textContent = "Your Suggestion *";
+    document.getElementById("text").placeholder = "Describe the feature or improvement you'd like...";
+    document.getElementById("charHint").textContent = "Max 2000 characters";
+    document.getElementById("labelNick").textContent = "Nickname (optional)";
+    document.getElementById("nickname").placeholder = "Your in-game name or alias";
+    document.getElementById("submitBtn").textContent = "Submit Suggestion";
+    document.getElementById("recentTitle").textContent = "\ud83d\udccb Recent Feedback";
+    document.getElementById("loadingFeedback").textContent = "Loading...";
+    document.getElementById("title-donate").textContent = "\u2764 Support the Author";
+    document.getElementById("subtitle-donate").textContent = "Your support keeps development going!";
+    document.getElementById("labelWechat").textContent = "WeChat Pay";
+    document.getElementById("rankingTitle").textContent = "\ud83c\udfc6 Donor Ranking";
+    document.getElementById("loadingDonors").textContent = "Loading...";
+    document.getElementById("backText").textContent = "Back to Home";
+    document.title = "Community \u2014 MWI Market Mate";
   }
-}
 
-/* ══════════════════════════════════════
-   反馈气泡卡片
-   ══════════════════════════════════════ */
-.fb-card {
-  border: 1px solid #2a2d37;
-  border-radius: 12px;
-  background: #1b1d24;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  transition: border-color 0.2s;
-}
+  const version = params.get("v") || "";
 
-.fb-card:hover {
-  border-color: rgba(91, 140, 255, 0.3);
-}
+  // ══════════════════════════════════════
+  //  提交建议
+  // ══════════════════════════════════════
+  const form = document.getElementById("feedbackForm");
+  const msgEl = document.getElementById("msg");
+  const submitBtn = document.getElementById("submitBtn");
 
-.fb-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    msgEl.className = "msg";
+    msgEl.style.display = "none";
 
-.fb-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #93c5fd;
-}
+    const text = document.getElementById("text").value.trim();
+    const nickname = document.getElementById("nickname").value.trim();
+    if (!text) return;
 
-.fb-time {
-  font-size: 11px;
-  color: #555a72;
-}
+    submitBtn.disabled = true;
+    submitBtn.textContent = lang === "en" ? "Submitting..." : "\u63d0\u4ea4\u4e2d...";
 
-.fb-body {
-  font-size: 13px;
-  color: #d1d5db;
-  line-height: 1.6;
-  word-break: break-word;
-  white-space: pre-wrap;
-}
+    try {
+      const resp = await fetch(API_BASE + "/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, nickname, version, lang }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        msgEl.className = "msg success";
+        msgEl.textContent = lang === "en"
+          ? "\u2705 Thank you! Your suggestion has been submitted."
+          : "\u2705 \u611f\u8c22\uff01\u4f60\u7684\u5efa\u8bae\u5df2\u63d0\u4ea4\u3002";
+        form.reset();
+        loadFeedback(); // 刷新列表
+      } else {
+        throw new Error(data.error || "Unknown error");
+      }
+    } catch (err) {
+      msgEl.className = "msg error";
+      msgEl.textContent = (lang === "en" ? "\u274c Submission failed: " : "\u274c \u63d0\u4ea4\u5931\u8d25\uff1a") + err.message;
+    } finally {
+      msgEl.style.display = "block";
+      submitBtn.disabled = false;
+      submitBtn.textContent = lang === "en" ? "Submit Suggestion" : "\u63d0\u4ea4\u5efa\u8bae";
+    }
+  });
 
-.fb-reply {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(52, 211, 153, 0.06);
-  border-left: 3px solid rgba(52, 211, 153, 0.4);
-  font-size: 13px;
-  color: #a7f3d0;
-  line-height: 1.5;
-  word-break: break-word;
-  white-space: pre-wrap;
-}
+  // ══════════════════════════════════════
+  //  加载建议列表
+  // ══════════════════════════════════════
+  const feedbackContainer = document.getElementById("feedbackList");
 
-.fb-reply-label {
-  font-weight: 600;
-  color: #6ee7b7;
-}
+  async function loadFeedback() {
+    try {
+      const resp = await fetch(API_BASE + "/api/feedback");
+      const data = await resp.json();
 
-/* ══════════════════════════════════════
-   排行榜表格
-   ══════════════════════════════════════ */
-.ranking-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 12px;
-  font-size: 13px;
-}
+      if (!data.feedback || data.feedback.length === 0) {
+        feedbackContainer.innerHTML = '<div class="empty-ranking">'
+          + (lang === "en" ? "No feedback yet. Be the first!" : "\u8fd8\u6ca1\u6709\u53cd\u9988\uff0c\u6765\u63d0\u4e2a\u5efa\u8bae\u5427\uff01")
+          + "</div>";
+        return;
+      }
 
-.ranking-table th {
-  text-align: left;
-  padding: 8px 10px;
-  border-bottom: 1px solid #2a2d37;
-  color: #6b7280;
-  font-weight: 600;
-  font-size: 12px;
-}
+      let html = "";
+      data.feedback.forEach(function (f) {
+        const name = escapeHtml(f.nickname || (lang === "en" ? "Anonymous" : "\u533f\u540d"));
+        const time = f.created_at ? f.created_at.slice(0, 10) : "";
 
-.ranking-table td {
-  padding: 10px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  color: #e4e6ee;
-}
+        html += '<div class="fb-card">';
+        html += '<div class="fb-header">';
+        html += '<span class="fb-name">' + name;
+        if (f.status === "completed") {
+          html += '<span class="fb-status-badge completed">' + (lang === "en" ? "\u2705 Resolved" : "\u2705 \u5df2\u89e3\u51b3") + "</span>";
+        }
+        html += "</span>";
+        html += '<span class="fb-time">' + time + "</span>";
+        html += "</div>";
+        html += '<div class="fb-body">' + escapeHtml(f.text) + "</div>";
 
-.ranking-table tr:first-child td { color: #fcd34d; font-weight: 600; }
-.ranking-table tr:nth-child(2) td { color: #d1d5db; font-weight: 500; }
-.ranking-table tr:nth-child(3) td { color: #cd7f32; font-weight: 500; }
+        if (f.reply) {
+          html += '<div class="fb-reply">';
+          html += '<span class="fb-reply-label">' + (lang === "en" ? "\ud83d\udc68\u200d\ud83d\udcbb Dev:" : "\ud83d\udc68\u200d\ud83d\udcbb \u4f5c\u8005\u56de\u590d\uff1a") + "</span> ";
+          html += escapeHtml(f.reply);
+          html += "</div>";
+        }
 
-.amount { color: #f8c86b; font-weight: 600; }
+        html += "</div>";
+      });
 
-/* 打赏者名字特效容器 */
-.donor-name-effect {
-  display: inline-block;
-  font-weight: 700;
-  font-size: 14px;
-  -webkit-background-clip: text;
-}
-
-
-.empty-ranking {
-  text-align: center;
-  padding: 24px;
-  color: #555a72;
-  font-size: 13px;
-}
-
-/* ══════════════════════════════════════
-   QR 码区域
-   ══════════════════════════════════════ */
-.qr-section {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  margin: 20px 0;
-  flex-wrap: wrap;
-}
-
-.qr-card {
-  text-align: center;
-  padding: 16px;
-  border: 1px solid #2a2d37;
-  border-radius: 12px;
-  background: #1b1d24;
-}
-
-.qr-card img {
-  width: 160px;
-  height: 160px;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.qr-label {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-/* ══════════════════════════════════════
-   页脚
-   ══════════════════════════════════════ */
-.footer {
-  margin-top: 32px;
-  font-size: 11px;
-  color: #3a3d4a;
-  text-align: center;
-}
-
-.footer a {
-  color: #555a72;
-  text-decoration: none;
-}
-
-.footer a:hover { color: #93c5fd; }
-
-/* ══════════════════════════════════════
-   加载动画
-   ══════════════════════════════════════ */
-.loading {
-  text-align: center;
-  padding: 24px;
-  color: #6b7280;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  margin: 24px 0 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #2a2d37;
-}
-
-/* ══════════════════════════════════════
-   落地页 — 功能卡片网格
-   ══════════════════════════════════════ */
-.landing-wrapper {
-  width: 100%;
-  max-width: 640px;
-  text-align: center;
-}
-
-.landing-wrapper h1 {
-  font-size: 28px;
-  margin-bottom: 4px;
-}
-
-.landing-subtitle {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.landing-version {
-  font-size: 12px;
-  color: #555a72;
-  margin-bottom: 24px;
-}
-
-.landing-buttons {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-bottom: 32px;
-}
-
-.landing-buttons .btn {
-  width: auto;
-  padding: 12px 24px;
-}
-
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  text-align: left;
-  margin-bottom: 28px;
-}
-
-.feature-card {
-  border: 1px solid #2a2d37;
-  border-radius: 10px;
-  background: #1b1d24;
-  padding: 14px;
-  transition: border-color 0.2s, transform 0.2s;
-}
-
-.feature-card:hover {
-  border-color: rgba(91, 140, 255, 0.3);
-  transform: translateY(-2px);
-}
-
-.feature-icon {
-  font-size: 20px;
-  margin-bottom: 6px;
-}
-
-.feature-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #e4e6ee;
-  margin-bottom: 4px;
-}
-
-.feature-desc {
-  font-size: 11px;
-  color: #6b7280;
-  line-height: 1.4;
-}
-
-.changelog-section {
-  text-align: left;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-.changelog-section ul {
-  list-style: none;
-  padding: 0;
-}
-
-.changelog-section li {
-  font-size: 12px;
-  color: #9ca3af;
-  padding: 4px 0;
-  padding-left: 16px;
-  position: relative;
-}
-
-.changelog-section li::before {
-  content: "•";
-  position: absolute;
-  left: 4px;
-  color: #555a72;
-}
-
-/* ══════════════════════════════════════
-   使用说明页
-   ══════════════════════════════════════ */
-.guide-wrapper {
-  width: 100%;
-  max-width: 720px;
-}
-
-.guide-content h2 {
-  font-size: 20px;
-  font-weight: 700;
-  color: #fff;
-  margin: 32px 0 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #2a2d37;
-}
-
-。guide-content h2:first-child {
-  margin-top: 16px;
-}
-
-。guide-content h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #93c5fd;
-  margin: 20px 0 8px;
-}
-
-。guide-content p {
-  font-size: 13px;
-  color: #d1d5db;
-  line-height: 1.7;
-  margin-bottom: 8px;
-}
-
-。guide-content ul, .guide-content ol {
-  padding-left: 20px;
-  margin-bottom: 12px;
-}
-
-。guide-content li {
-  font-size: 13px;
-  color: #d1d5db;
-  line-height: 1.7;
-  margin-bottom: 4px;
-}
-
-。guide-content b {
-  color: #e4e6ee;
-  font-weight: 600;
-}
-
-。guide-content code {
-  background: rgba(91, 140, 255, 0.1);
-  border: 1px solid rgba(91, 140, 255, 0.2);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 12px;
-  color: #93c5fd;
-  font-family: "Consolas", monospace;
-}
-
-/* ══════════════════════════════════════
-   反馈完成徽章
-   ══════════════════════════════════════ */
-。fb-status-badge {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  margin-left: 8px;
-  vertical-align: middle;
-}
-
-。fb-status-badge.completed {
-  background: rgba(52, 211, 153, 0.12);
-  color: #6ee7b7;
-  border: 1px solid rgba(52, 211, 153, 0.3);
-}
-
-@media (max-width: 520px) {
-  。feature-grid {
-    grid-template-columns: repeat(2, 1fr);
+      feedbackContainer.innerHTML = html;
+    } catch (err) {
+      feedbackContainer.innerHTML = '<div class="empty-ranking" style="color:#f87171;">'
+        + (lang === "en" ? "Failed to load feedback" : "\u52a0\u8f7d\u53cd\u9988\u5931\u8d25") + "</div>";
+    }
   }
-  。landing-buttons {
-    flex-direction: column;
-    align-items: center;
+
+  // ══════════════════════════════════════
+  //  加载打赏排行
+  // ══════════════════════════════════════
+  const rankingContainer = document.getElementById("rankingContent");
+
+  async function loadDonors() {
+    try {
+      const resp = await fetch(API_BASE + "/api/donors");
+      const data = await resp.json();
+
+      if (!data.donors || data.donors.length === 0) {
+        rankingContainer.innerHTML = '<div class="empty-ranking">'
+          + (lang === "en" ? "No donors yet. Be the first! \ud83c\udf89" : "\u6682\u65e0\u6253\u8d4f\u8bb0\u5f55\uff0c\u5feb\u6765\u6210\u4e3a\u7b2c\u4e00\u4e2a\u5427\uff01\ud83c\udf89")
+          + "</div>";
+        return;
+      }
+
+      var headerRank = lang === "en" ? "#" : "\u6392\u540d";
+      var headerName = lang === "en" ? "Name" : "\u6635\u79f0";
+      var headerAmount = lang === "en" ? "Amount" : "\u91d1\u989d";
+      var headerMsg = lang === "en" ? "Message" : "\u7559\u8a00";
+
+      let html = '<table class="ranking-table"><thead><tr>';
+      html += "<th>" + headerRank + "</th><th>" + headerName + "</th><th>" + headerAmount + "</th><th>" + headerMsg + "</th>";
+      html += "</tr></thead><tbody>";
+
+      data.donors.forEach(function (d, i) {
+        var medal = i === 0 ? "\ud83e\udd47" : i === 1 ? "\ud83e\udd48" : i === 2 ? "\ud83e\udd49" : (i + 1);
+
+        // 名字特效
+        var nameHtml;
+        if (d.css) {
+          nameHtml = '<span class="donor-name-effect" style="' + escapeAttr(d.css) + '">' + escapeHtml(d.name) + "</span>";
+        } else {
+          nameHtml = escapeHtml(d.name);
+        }
+
+        // 留言：图片URL自动渲染为图片
+        var msgHtml;
+        var msg = (d.message || "").trim();
+        if (/^https?:\/\/.+\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(msg)) {
+          msgHtml = '<img src="' + escapeAttr(msg) + '" class="donor-msg-img">';
+        } else {
+          msgHtml = escapeHtml(msg);
+        }
+
+        // 仅 CSS 中含 --row-shine:1 的行加整行扫光
+        var rowClass = (d.css && d.css.indexOf("--row-shine:1") !== -1) ? ' class="donor-row-effect"' : "";
+
+        html += "<tr" + rowClass + ">";
+        html += "<td>" + medal + "</td>";
+        html += "<td>" + nameHtml + "</td>";
+        html += '<td class="amount">\u00a5' + Number(d.amount).toFixed(2) + "</td>";
+        html += "<td>" + msgHtml + "</td>";
+        html += "</tr>";
+      });
+
+      html += "</tbody></table>";
+      rankingContainer.innerHTML = html;
+    } catch (err) {
+      rankingContainer.innerHTML = '<div class="empty-ranking" style="color:#f87171;">'
+        + (lang === "en" ? "Failed to load ranking" : "\u6392\u884c\u699c\u52a0\u8f7d\u5931\u8d25") + "</div>";
+    }
   }
-  。landing-buttons .btn {
-    width: 100%;
+
+  // ── 工具函数 ──
+  function escapeHtml(str) {
+    var div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
   }
-}
+
+  function escapeAttr(str) {
+    return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // ── 注入动画与样式（一次性，以后所有特效只需在 admin.py 改 CSS 字段） ──
+  var styleEl = document.createElement("style");
+  styleEl.textContent = [
+    // 名字扫光
+    "@keyframes donor-shine{0%{background-position:200% center}100%{background-position:-200% center}}",
+    // 呼吸发光
+    "@keyframes donor-breathe{0%,100%{filter:drop-shadow(0 0 2px rgba(244,64,64,.35)) drop-shadow(0 0 2px rgba(244,64,64,.35))}50%{filter:drop-shadow(0 0 8px rgba(244,64,64,1)) drop-shadow(0 0 16px rgba(244,80,60,.6))}}",
+    // 整行扫光
+    "@keyframes row-shine{0%{background-position:200% 0}100%{background-position:-200% 0}}",
+    // 彩虹色相旋转
+    "@keyframes donor-rainbow{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}",
+    // 缩放脉冲
+    "@keyframes donor-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}",
+    // 文字发光
+    "@keyframes donor-glow{0%,100%{text-shadow:0 0 4px currentColor}50%{text-shadow:0 0 16px currentColor,0 0 30px currentColor}}",
+    // 整行扫光样式
+    ".donor-row-effect{background:linear-gradient(90deg,transparent 0%,rgba(212,165,60,.06) 20%,rgba(245,214,128,.18) 45%,rgba(212,165,60,.06) 80%,transparent 100%);background-size:300% 100%;animation:row-shine 6s linear infinite}",
+    // 留言图片样式
+    ".donor-msg-img{max-height:80px;max-width:200px;border-radius:6px;vertical-align:middle;padding:4px 0}",
+  ].join("\n");
+  document.head.appendChild(styleEl);
+
+  // ── 初始化 ──
+  loadFeedback();
+  loadDonors();
+
+  // 锚点滚动
+  if (window.location.hash) {
+    var target = document.querySelector(window.location.hash);
+    if (target) setTimeout(function () { target.scrollIntoView({ behavior: "smooth" }); }, 300);
+  }
+})();
