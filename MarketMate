@@ -3,7 +3,7 @@
 // @name:en      MWI Market Mate
 // @name:zh-CN   MWI 市场伴侣
 // @namespace    https://milkywayidle.com/
-// @version      1.4.3
+// @version      1.4.6
 // @description  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
 // @description:en  Crafting/housing material auto-calc, shortage display, shopping list, market highlight. WS inventory + data layer. Bilingual (EN/ZH).
 // @description:zh-CN  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
@@ -15,7 +15,7 @@
 // @match        https://milkywayidlecn.com/*
 // @icon         https://www.milkywayidle.com/favicon.svg
 // @grant        none
-// @run-at       document-idle
+// @run-at       document-start
 // @downloadURL https://update.greasyfork.org/scripts/567386/MWI%20%E5%B8%82%E5%9C%BA%E4%BC%B4%E4%BE%A3.user.js
 // @updateURL https://update.greasyfork.org/scripts/567386/MWI%20%E5%B8%82%E5%9C%BA%E4%BC%B4%E4%BE%A3.meta.js
 // ==/UserScript==
@@ -26,7 +26,7 @@
     /** 脚本元信息及 localStorage 键名 */
     const SCRIPT = {
         id: "mwi-missing-cart-cn",
-        version: "1.4.3",
+        version: "1.4.6",
         cartKey: "mwi_missing_cart_v1",         // 购物车持久化
         plansKey: "mwi_crafting_plans_v1",      // 制作计划持久化
         fabPosKey: "mwi_missing_cart_fab_pos_v1",    // FAB 悬浮按钮位置
@@ -102,229 +102,233 @@
     /** 翻译映射表 */
     const _I18N = {
         // ── 通用 ──
-        "init":                  { zh: "初始化中...", en: "Initializing..." },
-        "unknown_item":          { zh: "未知物品", en: "Unknown Item" },
-        "upgrade_item":          { zh: "升级物品", en: "Upgrade Item" },
-        "item":                  { zh: "物品", en: "Item" },
+        "init": { zh: "初始化中...", en: "Initializing..." },
+        "unknown_item": { zh: "未知物品", en: "Unknown Item" },
+        "upgrade_item": { zh: "升级物品", en: "Upgrade Item" },
+        "item": { zh: "物品", en: "Item" },
 
         // ── FAB / 面板标题 ──
-        "shopping_list":         { zh: "购物清单", en: "Shopping List" },
-        "shopping_list_count":   { zh: "购物清单，{0} 种物品", en: "Shopping List, {0} items" },
-        "crafting_plans":        { zh: "制作计划", en: "Crafting Plans" },
+        "shopping_list": { zh: "购物清单", en: "Shopping List" },
+        "shopping_list_count": { zh: "购物清单，{0} 种物品", en: "Shopping List, {0} items" },
+        "crafting_plans": { zh: "制作计划", en: "Crafting Plans" },
 
         // ── 购物车面板按钮 ──
-        "pick_from_inv":         { zh: "从背包添加", en: "Pick from Bag" },
-        "confirm_pick":          { zh: "✅ 确认选择", en: "✅ Confirm" },
-        "clear":                 { zh: "清空", en: "Clear" },
-        "clear_non_starred":     { zh: "清空非收藏", en: "Clear Non-Starred" },
-        "keep_starred":          { zh: "保留 ⭐ 收藏物品", en: "Keep ⭐ starred items" },
-        "clear_all_warn":        { zh: "⚠ 清空全部", en: "⚠ Clear All" },
-        "incl_starred":          { zh: "包括收藏物品", en: "Including starred" },
-        "settings":              { zh: "⚙ 设置", en: "⚙ Settings" },
-        "collapse":              { zh: "收起", en: "Collapse" },
-        "toggle_plans":          { zh: "展开/收起制作计划", en: "Toggle Crafting Plans" },
-        "search_placeholder":    { zh: "搜索物品...", en: "Search items..." },
-        "resize_hint":           { zh: "拖动调整大小", en: "Drag to resize" },
-        "go_to_market":          { zh: "直达市场", en: "Go to Market" },
-        "remove":                { zh: "移除", en: "Remove" },
-        "star_pin":              { zh: "收藏置顶", en: "Star & Pin" },
-        "market_icon_tip":       { zh: "一键前往市场并设置定位", en: "Go to market & locate" },
+        "pick_from_inv": { zh: "从背包添加", en: "Pick from Bag" },
+        "confirm_pick": { zh: "✅ 确认选择", en: "✅ Confirm" },
+        "clear": { zh: "清空", en: "Clear" },
+        "clear_non_starred": { zh: "清空非收藏", en: "Clear Non-Starred" },
+        "keep_starred": { zh: "保留 ⭐ 收藏物品", en: "Keep ⭐ starred items" },
+        "clear_all_warn": { zh: "⚠ 清空全部", en: "⚠ Clear All" },
+        "incl_starred": { zh: "包括收藏物品", en: "Including starred" },
+        "settings": { zh: "⚙ 设置", en: "⚙ Settings" },
+        "collapse": { zh: "收起", en: "Collapse" },
+        "toggle_plans": { zh: "展开/收起制作计划", en: "Toggle Crafting Plans" },
+        "search_placeholder": { zh: "搜索物品...", en: "Search items..." },
+        "resize_hint": { zh: "拖动调整大小", en: "Drag to resize" },
+        "go_to_market": { zh: "直达市场", en: "Go to Market" },
+        "remove": { zh: "移除", en: "Remove" },
+        "star_pin": { zh: "收藏置顶", en: "Star & Pin" },
+        "market_icon_tip": { zh: "一键前往市场并设置定位", en: "Go to market & locate" },
 
         // ── 购物车内容 ──
-        "shortage":              { zh: "缺料", en: "Short" },
-        "shortage_n":            { zh: "缺{0}", en: "Need {0}" },
-        "fulfilled":             { zh: "✓ 已补齐", en: "✓ Fulfilled" },
-        "auto_refill":           { zh: "⟲ 自动回填", en: "⟲ Auto-refill" },
-        "qty_reactivate_tip":    { zh: "输入数量可重新激活", en: "Enter qty to reactivate" },
-        "empty_cart":            { zh: "购物清单为空", en: "Shopping list is empty" },
-        "no_match":              { zh: '没有匹配 "{0}" 的物品', en: 'No items matching "{0}"' },
+        "shortage": { zh: "缺料", en: "Short" },
+        "shortage_n": { zh: "缺{0}", en: "Need {0}" },
+        "fulfilled": { zh: "✓ 已补齐", en: "✓ Fulfilled" },
+        "auto_refill": { zh: "⟲ 自动回填", en: "⟲ Auto-refill" },
+        "qty_reactivate_tip": { zh: "输入数量可重新激活", en: "Enter qty to reactivate" },
+        "empty_cart": { zh: "购物清单为空", en: "Shopping list is empty" },
+        "no_match": { zh: '没有匹配 "{0}" 的物品', en: 'No items matching "{0}"' },
 
         // ── 常备量 ──
-        "threshold_sufficient":  { zh: "充足", en: "OK" },
-        "threshold_low":         { zh: "低于阈值", en: "Below" },
-        "threshold_label":       { zh: "常备", en: "Reserve" },
-        "stock_label":           { zh: "库存", en: "Stock" },
-        "set_threshold":         { zh: "+ 设置常备量", en: "+ Set Reserve" },
-        "click_edit_threshold":  { zh: "点击修改常备量", en: "Click to edit reserve" },
-        "edit_threshold_title":  { zh: "修改常备数量", en: "Edit Reserve Qty" },
-        "set_threshold_title":   { zh: "设置常备数量", en: "Set Reserve Qty" },
-        "threshold_desc":        { zh: "当库存低于此数量时，自动回填缺料到购物车。", en: "Auto-refill shortage when stock falls below this amount." },
-        "threshold_amount":      { zh: "常备量", en: "Reserve" },
+        "threshold_sufficient": { zh: "充足", en: "OK" },
+        "threshold_low": { zh: "低于阈值", en: "Below" },
+        "threshold_label": { zh: "常备", en: "Reserve" },
+        "stock_label": { zh: "库存", en: "Stock" },
+        "set_threshold": { zh: "+ 设置常备量", en: "+ Set Reserve" },
+        "click_edit_threshold": { zh: "点击修改常备量", en: "Click to edit reserve" },
+        "edit_threshold_title": { zh: "修改常备数量", en: "Edit Reserve Qty" },
+        "set_threshold_title": { zh: "设置常备数量", en: "Set Reserve Qty" },
+        "threshold_desc": { zh: "当库存低于此数量时，自动回填缺料到购物车。", en: "Auto-refill shortage when stock falls below this amount." },
+        "threshold_amount": { zh: "常备量", en: "Reserve" },
         "threshold_placeholder": { zh: "例如 500", en: "e.g. 500" },
-        "threshold_unit":        { zh: "个", en: "pcs" },
-        "current_stock":         { zh: "当前库存：{0}", en: "Current stock: {0}" },
-        "clear_threshold":       { zh: "清除常备", en: "Clear Reserve" },
-        "cancel":                { zh: "取消", en: "Cancel" },
-        "confirm":               { zh: "确认", en: "Confirm" },
+        "threshold_unit": { zh: "个", en: "pcs" },
+        "current_stock": { zh: "当前库存：{0}", en: "Current stock: {0}" },
+        "clear_threshold": { zh: "清除常备", en: "Clear Reserve" },
+        "cancel": { zh: "取消", en: "Cancel" },
+        "confirm": { zh: "确认", en: "Confirm" },
         "threshold_preview_short": { zh: "当前库存：{0} → 缺料 = {1} − {2} = {3}", en: "Stock: {0} → Shortage = {1} − {2} = {3}" },
-        "threshold_preview_ok":  { zh: "当前库存：{0} → 库存充足", en: "Stock: {0} → Sufficient" },
+        "threshold_preview_ok": { zh: "当前库存：{0} → 库存充足", en: "Stock: {0} → Sufficient" },
 
         // ── 设置面板 ──
-        "s_lock_panel":          { zh: "锁定面板", en: "Lock Panel" },
-        "s_lock_panel_desc":     { zh: "开启后点击外部区域不会收起面板", en: "Panel stays open when clicking outside" },
-        "s_market_locate":       { zh: "市场定位", en: "Market Locate" },
-        "s_market_locate_desc":  { zh: "直达市场时高亮购物车中匹配的物品", en: "Highlight matching items when navigating to market" },
-        "s_incl_upgrade":        { zh: "包含升级物品", en: "Include Upgrades" },
-        "s_incl_upgrade_desc":   { zh: '关闭后不计算「升级自」栏的物品，也不加入购物车', en: "Exclude upgrade slot items from calculation and cart" },
-        "s_inv_sync":            { zh: "背包库存同步", en: "Inventory Sync" },
-        "s_inv_sync_desc":       { zh: "监听WS与背包变化，购买后实时扣减购物清单", en: "Auto-deduct from list when items are purchased via WS" },
-        "s_auto_collapse":       { zh: "补齐自动收起", en: "Auto-Collapse" },
-        "s_auto_collapse_desc":  { zh: "购物清单物品被库存同步全部清空后自动收起面板", en: "Auto-collapse panel when all items fulfilled" },
-        "s_auto_prefill":        { zh: "市场预填数量", en: "Market Pre-fill" },
-        "s_auto_prefill_desc":   { zh: "打开市场购买弹窗时自动将缺料数量填入数量框", en: "Auto-fill shortage qty in market buy dialog" },
-        "s_purchase_nav":        { zh: "采购导航条", en: "Purchase Nav Bar" },
-        "s_purchase_nav_desc":   { zh: "市场弹窗底部显示购物车物品导航，快速切换", en: "Show cart items nav bar below market panel" },
-        "s_crafting_plans":      { zh: "制作计划", en: "Crafting Plans" },
+        "s_lock_panel": { zh: "锁定面板", en: "Lock Panel" },
+        "s_lock_panel_desc": { zh: "开启后点击外部区域不会收起面板", en: "Panel stays open when clicking outside" },
+        "s_market_locate": { zh: "市场定位", en: "Market Locate" },
+        "s_market_locate_desc": { zh: "直达市场时高亮购物车中匹配的物品", en: "Highlight matching items when navigating to market" },
+        "s_incl_upgrade": { zh: "包含升级物品", en: "Include Upgrades" },
+        "s_incl_upgrade_desc": { zh: '关闭后不计算「升级自」栏的物品，也不加入购物车', en: "Exclude upgrade slot items from calculation and cart" },
+        "s_inv_sync": { zh: "背包库存同步", en: "Inventory Sync" },
+        "s_inv_sync_desc": { zh: "监听WS与背包变化，购买后实时扣减购物清单", en: "Auto-deduct from list when items are purchased via WS" },
+        "s_auto_collapse": { zh: "补齐自动收起", en: "Auto-Collapse" },
+        "s_auto_collapse_desc": { zh: "购物清单物品被库存同步全部清空后自动收起面板", en: "Auto-collapse panel when all items fulfilled" },
+        "s_auto_prefill": { zh: "市场预填数量", en: "Market Pre-fill" },
+        "s_auto_prefill_desc": { zh: "打开市场购买弹窗时自动将缺料数量填入数量框", en: "Auto-fill shortage qty in market buy dialog" },
+        "s_purchase_nav": { zh: "采购导航条", en: "Purchase Nav Bar" },
+        "s_purchase_nav_desc": { zh: "市场弹窗底部显示购物车物品导航，快速切换", en: "Show cart items nav bar below market panel" },
+        "s_crafting_plans": { zh: "制作计划", en: "Crafting Plans" },
         "s_crafting_plans_desc": { zh: "开启制作计划与库存锁定功能，关闭后不再创建计划也不扣减锁定库存", en: "Enable crafting plan tracking & inventory locking" },
-        "s_manual_sync":         { zh: "立即同步", en: "Manual Sync" },
-        "s_manual_sync_desc":    { zh: "手动触发一次库存同步", en: "Trigger inventory sync manually" },
-        "s_manual_sync_btn":     { zh: "🔄 同步", en: "🔄 Sync" },
-        "s_reset_size":          { zh: "重置面板大小", en: "Reset Panel Size" },
-        "s_reset_size_desc":     { zh: "恢复购物清单面板为默认自适应尺寸", en: "Restore panel to default size" },
-        "s_reset_btn":           { zh: "↩ 重置", en: "↩ Reset" },
-        "s_data_source":         { zh: "数据源", en: "Data Source" },
-        "s_language":            { zh: "界面语言", en: "Language" },
-        "s_language_desc":       { zh: "切换插件界面语言（需要重新打开面板生效）", en: "Switch plugin UI language (reopen panel to apply)" },
-        "s_lang_zh":             { zh: "中文", en: "中文" },
-        "s_lang_en":             { zh: "EN", en: "EN" },
-        "toggle_on":             { zh: "开", en: "ON" },
-        "toggle_off":            { zh: "关", en: "OFF" },
+        "s_manual_sync": { zh: "立即同步", en: "Manual Sync" },
+        "s_manual_sync_desc": { zh: "手动触发一次库存同步", en: "Trigger inventory sync manually" },
+        "s_manual_sync_btn": { zh: "🔄 同步", en: "🔄 Sync" },
+        "s_reset_size": { zh: "重置面板大小", en: "Reset Panel Size" },
+        "s_reset_size_desc": { zh: "恢复购物清单面板为默认自适应尺寸", en: "Restore panel to default size" },
+        "s_reset_btn": { zh: "↩ 重置", en: "↩ Reset" },
+        "s_community_btn": { zh: "💬 反馈与支持", en: "💬 Feedback & Support" },
+        "s_guide_btn": { zh: "📖 使用说明", en: "📖 User Guide" },
+        "s_language": { zh: "界面语言", en: "Language" },
+        "s_language_desc": { zh: "切换插件界面语言（需要重新打开面板生效）", en: "Switch plugin UI language (reopen panel to apply)" },
+        "s_lang_zh": { zh: "中文", en: "中文" },
+        "s_lang_en": { zh: "EN", en: "EN" },
+        "toggle_on": { zh: "开", en: "ON" },
+        "toggle_off": { zh: "关", en: "OFF" },
 
         // ── 摘要面板 ──
-        "summary_missing":       { zh: "缺 {0} 种 / {1} 件", en: "{0} types / {1} pcs short" },
-        "summary_sufficient":    { zh: "材料充足", en: "Materials sufficient" },
-        "add_to_cart":           { zh: "加入购物清单", en: "Add to Shopping List" },
-        "plan_count_label":      { zh: "计划次数", en: "Planned actions" },
-        "data_layer_tag":        { zh: "⚡数据层", en: "⚡DataLayer" },
-        "artisan_tag":           { zh: "工匠-{0}%", en: "Artisan-{0}%" },
-        "has_plan_tag":          { zh: "已有计划", en: "Has Plan" },
+        "summary_missing": { zh: "缺 {0} 种 / {1} 件", en: "{0} types / {1} pcs short" },
+        "summary_sufficient": { zh: "材料充足", en: "Materials sufficient" },
+        "add_to_cart": { zh: "加入购物清单", en: "Add to Shopping List" },
+        "plan_count_label": { zh: "计划次数", en: "Planned actions" },
+        "data_layer_tag": { zh: "⚡数据层", en: "⚡DataLayer" },
+        "artisan_tag": { zh: "工匠-{0}%", en: "Artisan-{0}%" },
+        "has_plan_tag": { zh: "已有计划", en: "Has Plan" },
 
         // ── 制作计划面板 ──
-        "plan_clear_all":        { zh: "清空", en: "Clear" },
-        "plan_remove":           { zh: "移除计划", en: "Remove Plan" },
-        "plan_waiting":          { zh: "等待制作", en: "Waiting" },
-        "plan_inv_lock":         { zh: "库存锁定", en: "Inv. Locked" },
-        "plan_stale":            { zh: "⏰ 超过24小时，可能已过期", en: "⏰ Over 24h, may be stale" },
+        "plan_clear_all": { zh: "清空", en: "Clear" },
+        "plan_remove": { zh: "移除计划", en: "Remove Plan" },
+        "plan_waiting": { zh: "等待制作", en: "Waiting" },
+        "plan_inv_lock": { zh: "库存锁定", en: "Inv. Locked" },
+        "plan_stale": { zh: "⏰ 超过24小时，可能已过期", en: "⏰ Over 24h, may be stale" },
 
         // ── 采购导航 ──
-        "nav_short":             { zh: "缺 {0}", en: "Need {0}" },
-        "nav_item_done":         { zh: "✅ {0} 已购齐", en: "✅ {0} fulfilled" },
-        "nav_next_label":        { zh: "下一项：{0} ×{1}", en: "Next: {0} ×{1}" },
-        "nav_next_btn":          { zh: "采购下一个 ▶", en: "Next item ▶" },
-        "nav_all_done":          { zh: "🎉 购物清单全部购齐！", en: "🎉 All items purchased!" },
-        "prefill_tag":           { zh: "已预填", en: "Pre-filled" },
+        "nav_short": { zh: "缺 {0}", en: "Need {0}" },
+        "nav_item_done": { zh: "✅ {0} 已购齐", en: "✅ {0} fulfilled" },
+        "nav_next_label": { zh: "下一项：{0} ×{1}", en: "Next: {0} ×{1}" },
+        "nav_next_btn": { zh: "采购下一个 ▶", en: "Next item ▶" },
+        "nav_all_done": { zh: "🎉 购物清单全部购齐！", en: "🎉 All items purchased!" },
+        "prefill_tag": { zh: "已预填", en: "Pre-filled" },
 
         // ── Toast 消息 ──
-        "toast_plan_done":       { zh: "✅ 制作计划完成：{0}", en: "✅ Crafting plan done: {0}" },
-        "toast_auto_removed":    { zh: "已自动移除 {0} 种已补齐的物品", en: "Auto-removed {0} fulfilled item(s)" },
-        "toast_refill_one":      { zh: "「{0}」库存不足，已自动回填缺料", en: '"{0}" stock low, auto-refilled shortage' },
-        "toast_refill_multi":    { zh: "「{0}」等 {1} 种物品库存不足，已自动回填", en: '"{0}" and {1} other item(s) low, auto-refilled' },
-        "toast_all_fulfilled":   { zh: "购物清单已全部补齐，自动收起", en: "All items fulfilled, auto-collapsed" },
-        "toast_pick_hint":       { zh: "点击背包中的物品进行选择，完成后点击「确认选择」", en: "Click bag items to select, then click Confirm" },
-        "toast_unrecognized":    { zh: "无法识别此物品", en: "Cannot identify this item" },
-        "toast_no_pick":         { zh: "未选择任何物品", en: "No items selected" },
-        "toast_picked_n":        { zh: "已添加 {0} 种物品到购物清单", en: "Added {0} item(s) to shopping list" },
-        "toast_plans_cleared":   { zh: "已清空所有制作计划", en: "All crafting plans cleared" },
-        "toast_plan_removed":    { zh: "已移除制作计划", en: "Crafting plan removed" },
-        "toast_all_starred":     { zh: "所有物品均已收藏，请使用 ▾ 下拉菜单清空全部", en: "All items starred. Use ▾ dropdown to clear all" },
-        "toast_cleared_kept":    { zh: "已清空 {0} 项，保留 {1} 个收藏物品", en: "Cleared {0} items, kept {1} starred" },
-        "toast_cart_cleared":    { zh: "购物清单已清空", en: "Shopping list cleared" },
-        "toast_cart_all_cleared":{ zh: "购物清单已全部清空", en: "Shopping list fully cleared" },
-        "toast_plans_disabled":  { zh: "制作计划功能已关闭，请在设置中开启", en: "Crafting plans disabled. Enable in settings" },
-        "toast_locate_on":       { zh: "定位已开启", en: "Locate enabled" },
-        "toast_locate_off":      { zh: "定位已关闭", en: "Locate disabled" },
-        "toast_upgrade_on":      { zh: "已包含升级物品", en: "Upgrades included" },
-        "toast_upgrade_off":     { zh: "已排除升级物品", en: "Upgrades excluded" },
-        "toast_sync_on":         { zh: "背包同步已开启（{0}）", en: "Inventory sync enabled ({0})" },
-        "toast_sync_off":        { zh: "背包同步已关闭", en: "Inventory sync disabled" },
+        "toast_plan_done": { zh: "✅ 制作计划完成：{0}", en: "✅ Crafting plan done: {0}" },
+        "toast_auto_removed": { zh: "已自动移除 {0} 种已补齐的物品", en: "Auto-removed {0} fulfilled item(s)" },
+        "toast_refill_one": { zh: "「{0}」库存不足，已自动回填缺料", en: '"{0}" stock low, auto-refilled shortage' },
+        "toast_refill_multi": { zh: "「{0}」等 {1} 种物品库存不足，已自动回填", en: '"{0}" and {1} other item(s) low, auto-refilled' },
+        "toast_all_fulfilled": { zh: "购物清单已全部补齐，自动收起", en: "All items fulfilled, auto-collapsed" },
+        "toast_pick_hint": { zh: "点击背包中的物品进行选择，完成后点击「确认选择」", en: "Click bag items to select, then click Confirm" },
+        "toast_unrecognized": { zh: "无法识别此物品", en: "Cannot identify this item" },
+        "toast_no_pick": { zh: "未选择任何物品", en: "No items selected" },
+        "toast_picked_n": { zh: "已添加 {0} 种物品到购物清单", en: "Added {0} item(s) to shopping list" },
+        "toast_plans_cleared": { zh: "已清空所有制作计划", en: "All crafting plans cleared" },
+        "toast_plan_removed": { zh: "已移除制作计划", en: "Crafting plan removed" },
+        "toast_all_starred": { zh: "所有物品均已收藏，请使用 ▾ 下拉菜单清空全部", en: "All items starred. Use ▾ dropdown to clear all" },
+        "toast_cleared_kept": { zh: "已清空 {0} 项，保留 {1} 个收藏物品", en: "Cleared {0} items, kept {1} starred" },
+        "toast_cart_cleared": { zh: "购物清单已清空", en: "Shopping list cleared" },
+        "toast_cart_all_cleared": { zh: "购物清单已全部清空", en: "Shopping list fully cleared" },
+        "toast_plans_disabled": { zh: "制作计划功能已关闭，请在设置中开启", en: "Crafting plans disabled. Enable in settings" },
+        "toast_locate_on": { zh: "定位已开启", en: "Locate enabled" },
+        "toast_locate_off": { zh: "定位已关闭", en: "Locate disabled" },
+        "toast_upgrade_on": { zh: "已包含升级物品", en: "Upgrades included" },
+        "toast_upgrade_off": { zh: "已排除升级物品", en: "Upgrades excluded" },
+        "toast_sync_on": { zh: "背包同步已开启（{0}）", en: "Inventory sync enabled ({0})" },
+        "toast_sync_off": { zh: "背包同步已关闭", en: "Inventory sync disabled" },
         "toast_autocollapse_on": { zh: "补齐自动收起已开启", en: "Auto-collapse enabled" },
-        "toast_autocollapse_off":{ zh: "补齐自动收起已关闭", en: "Auto-collapse disabled" },
-        "toast_prefill_on":      { zh: "市场预填已开启", en: "Market pre-fill enabled" },
-        "toast_prefill_off":     { zh: "市场预填已关闭", en: "Market pre-fill disabled" },
-        "toast_nav_on":          { zh: "采购导航已开启", en: "Purchase nav enabled" },
-        "toast_nav_off":         { zh: "采购导航已关闭", en: "Purchase nav disabled" },
-        "toast_plans_on":        { zh: "制作计划功能已开启", en: "Crafting plans enabled" },
-        "toast_plans_off":       { zh: "制作计划功能已关闭（库存锁定同步停用）", en: "Crafting plans disabled (inventory lock off)" },
-        "toast_no_inv":          { zh: "❌ 未读取到库存", en: "❌ No inventory data" },
-        "toast_sync_done":       { zh: "✅ 同步完成（{0}源，{1} 种）", en: "✅ Sync done ({0}, {1} types)" },
-        "toast_reset_done":      { zh: "✅ 面板大小与位置已重置为默认", en: "✅ Panel size & position reset" },
-        "toast_market_ok":       { zh: "已直达市场：{0}", en: "Navigated to market: {0}" },
-        "toast_market_off":      { zh: "已打开市场（定位关闭）", en: "Market opened (locate off)" },
-        "toast_market_fail":     { zh: "未能直达市场", en: "Failed to navigate to market" },
-        "toast_item_removed":    { zh: "已移除物品", en: "Item removed" },
-        "toast_no_missing":      { zh: "当前没有需要补充的材料", en: "No materials needed" },
-        "toast_no_id":           { zh: "缺料已识别，但未拿到可加入清单的物品ID", en: "Shortage found but no valid item IDs" },
-        "toast_added_skipped":   { zh: "已加入 {0} 种，跳过 {1} 种无ID物品", en: "Added {0}, skipped {1} (no ID)" },
-        "toast_added":           { zh: "已加入购物清单：{0} 种，数量 {1}", en: "Added to list: {0} types, qty {1}" },
-        "toast_threshold_set":   { zh: '已设置「{0}」常备 {1}', en: 'Reserve set for "{0}": {1}' },
-        "toast_threshold_invalid":{ zh: "请输入有效的常备数量", en: "Please enter a valid reserve amount" },
-        "toast_threshold_cleared":{ zh: '已清除「{0}」的常备设置', en: 'Reserve cleared for "{0}"' },
+        "toast_autocollapse_off": { zh: "补齐自动收起已关闭", en: "Auto-collapse disabled" },
+        "toast_prefill_on": { zh: "市场预填已开启", en: "Market pre-fill enabled" },
+        "toast_prefill_off": { zh: "市场预填已关闭", en: "Market pre-fill disabled" },
+        "toast_nav_on": { zh: "采购导航已开启", en: "Purchase nav enabled" },
+        "toast_nav_off": { zh: "采购导航已关闭", en: "Purchase nav disabled" },
+        "toast_plans_on": { zh: "制作计划功能已开启", en: "Crafting plans enabled" },
+        "toast_plans_off": { zh: "制作计划功能已关闭（库存锁定同步停用）", en: "Crafting plans disabled (inventory lock off)" },
+        "toast_no_inv": { zh: "❌ 未读取到库存", en: "❌ No inventory data" },
+        "toast_sync_done": { zh: "✅ 同步完成（{0}源，{1} 种）", en: "✅ Sync done ({0}, {1} types)" },
+        "toast_reset_done": { zh: "✅ 面板大小与位置已重置为默认", en: "✅ Panel size & position reset" },
+        "toast_market_ok": { zh: "已直达市场：{0}", en: "Navigated to market: {0}" },
+        "toast_market_off": { zh: "已打开市场（定位关闭）", en: "Market opened (locate off)" },
+        "toast_market_fail": { zh: "未能直达市场", en: "Failed to navigate to market" },
+        "toast_item_removed": { zh: "已移除物品", en: "Item removed" },
+        "toast_no_missing": { zh: "当前没有需要补充的材料", en: "No materials needed" },
+        "toast_no_id": { zh: "缺料已识别，但未拿到可加入清单的物品ID", en: "Shortage found but no valid item IDs" },
+        "toast_added_skipped": { zh: "已加入 {0} 种，跳过 {1} 种无ID物品", en: "Added {0}, skipped {1} (no ID)" },
+        "toast_added": { zh: "已加入购物清单：{0} 种，数量 {1}", en: "Added to list: {0} types, qty {1}" },
+        "toast_threshold_set": { zh: '已设置「{0}」常备 {1}', en: 'Reserve set for "{0}": {1}' },
+        "toast_threshold_invalid": { zh: "请输入有效的常备数量", en: "Please enter a valid reserve amount" },
+        "toast_threshold_cleared": { zh: '已清除「{0}」的常备设置', en: 'Reserve cleared for "{0}"' },
 
         // ── 状态/日志 ──
-        "action_added_to_cart":  { zh: "已将缺料加入购物清单", en: "Added shortage to shopping list" },
-        "action_cleared_non":    { zh: "已清空非收藏物品", en: "Cleared non-starred items" },
-        "action_cleared_all":    { zh: "已清空购物清单（含收藏）", en: "Cleared shopping list (incl. starred)" },
-        "action_market_ok":      { zh: "已直达市场：{0}", en: "Market: {0}" },
-        "action_market_off":     { zh: "已直达市场：{0}（定位关闭）", en: "Market: {0} (locate off)" },
-        "action_market_fail":    { zh: "直达市场失败：{0}", en: "Market nav failed: {0}" },
-        "action_calculated":     { zh: "已计算缺料：{0} 种，{1}", en: "Calculated: {0} types, {1} short" },
-        "action_sufficient":     { zh: "已计算缺料：材料充足", en: "Calculated: materials sufficient" },
-        "action_startup":        { zh: "v{0} 已启动（{1}，{2}，{3}，数据源:{4}），等待打开制作/房屋/市场弹窗", en: "v{0} started ({1}, {2}, {3}, src:{4}), waiting for panel" },
-        "ws_exact":              { zh: "WS精确", en: "WS" },
-        "ws_waiting":            { zh: "等待WS", en: "WS pending" },
-        "dl_ok":                 { zh: "数据层✓", en: "DataLayer✓" },
-        "dl_fallback":           { zh: "DOM回退", en: "DOM fallback" },
-        "plans_n":               { zh: "{0}计划", en: "{0} plans" },
-        "no_plans":              { zh: "无计划", en: "No plans" },
-        "cache":                 { zh: "缓存", en: "cache" },
+        "action_added_to_cart": { zh: "已将缺料加入购物清单", en: "Added shortage to shopping list" },
+        "action_cleared_non": { zh: "已清空非收藏物品", en: "Cleared non-starred items" },
+        "action_cleared_all": { zh: "已清空购物清单（含收藏）", en: "Cleared shopping list (incl. starred)" },
+        "action_market_ok": { zh: "已直达市场：{0}", en: "Market: {0}" },
+        "action_market_off": { zh: "已直达市场：{0}（定位关闭）", en: "Market: {0} (locate off)" },
+        "action_market_fail": { zh: "直达市场失败：{0}", en: "Market nav failed: {0}" },
+        "action_calculated": { zh: "已计算缺料：{0} 种，{1}", en: "Calculated: {0} types, {1} short" },
+        "action_sufficient": { zh: "已计算缺料：材料充足", en: "Calculated: materials sufficient" },
+        "action_startup": { zh: "v{0} 已启动（{1}，{2}，{3}，数据源:{4}），等待打开制作/房屋/市场弹窗", en: "v{0} started ({1}, {2}, {3}, src:{4}), waiting for panel" },
+        "ws_exact": { zh: "WS精确", en: "WS" },
+        "ws_waiting": { zh: "等待WS", en: "WS pending" },
+        "dl_ok": { zh: "数据层✓", en: "DataLayer✓" },
+        "dl_fallback": { zh: "DOM回退", en: "DOM fallback" },
+        "plans_n": { zh: "{0}计划", en: "{0} plans" },
+        "no_plans": { zh: "无计划", en: "No plans" },
+        "cache": { zh: "缓存", en: "cache" },
 
         // ── WS 状态显示 ──
-        "ws_status_ok":          { zh: "✅ WS库存（{0}种）", en: "✅ WS Inv ({0})" },
-        "ws_status_wait":        { zh: "⏳ 等待WS", en: "⏳ WS pending" },
-        "dl_status_ok":          { zh: "✅ 数据层（{0}配方·{1}）", en: "✅ DataLayer ({0} recipes·{1})" },
-        "dl_status_wait":        { zh: "⏳ 等待数据层", en: "⏳ DataLayer pending" },
-        "none":                  { zh: "无", en: "none" },
+        "ws_status_ok": { zh: "✅ WS库存（{0}种）", en: "✅ WS Inv ({0})" },
+        "ws_status_wait": { zh: "⏳ 等待WS", en: "⏳ WS pending" },
+        "dl_status_ok": { zh: "✅ 数据层（{0}配方·{1}）", en: "✅ DataLayer ({0} recipes·{1})" },
+        "dl_status_wait": { zh: "⏳ 等待数据层", en: "⏳ DataLayer pending" },
+        "none": { zh: "无", en: "none" },
 
         // ── 拾取模式 ──
-        "pick_selected":         { zh: "已选 <strong>{0}</strong> 种物品", en: "<strong>{0}</strong> item(s) selected" },
-        "pick_cancel":           { zh: "取消选择", en: "Cancel" },
-        "pick_confirm_title":    { zh: "确认添加到购物清单", en: "Confirm Add to List" },
-        "pick_subtitle":         { zh: "已选 {0} 种物品，可修改数量", en: "{0} item(s) selected, edit qty below" },
-        "pick_confirm_btn":      { zh: "确认添加", en: "Confirm Add" },
-        "pick_back_btn":         { zh: "继续选择", en: "Continue Picking" },
+        "pick_selected": { zh: "已选 <strong>{0}</strong> 种物品", en: "<strong>{0}</strong> item(s) selected" },
+        "pick_cancel": { zh: "取消选择", en: "Cancel" },
+        "pick_confirm_title": { zh: "确认添加到购物清单", en: "Confirm Add to List" },
+        "pick_subtitle": { zh: "已选 {0} 种物品，可修改数量", en: "{0} item(s) selected, edit qty below" },
+        "pick_confirm_btn": { zh: "确认添加", en: "Confirm Add" },
+        "pick_back_btn": { zh: "继续选择", en: "Continue Picking" },
 
         // ── v1.4.3: Z-score 安全边际 ──
-        "s_zscore":              { zh: "安全边际", en: "Safety Margin" },
-        "s_zscore_desc":         { zh: "工匠茶概率模型 Z-score（越高越安全，推荐95%）", en: "Artisan tea Z-score (higher = safer, 95% recommended)" },
-        "s_zscore_none":         { zh: "关闭（线性）", en: "Off (linear)" },
-        "s_guzzling":            { zh: "暴饮袋等级", en: "Guzzling Pouch" },
-        "s_guzzling_desc":       { zh: "暴饮袋强化等级（影响工匠茶浓缩倍率）", en: "Guzzling pouch enhancement level (affects tea concentration)" },
-        "s_guzzling_auto":       { zh: "自动检测", en: "Auto-detect" },
-        "zscore_tag":            { zh: "Z={0}", en: "Z={0}" },
-        "zscore_hover":          { zh: "期望 {0} + 余量 {1} = {2}", en: "Expected {0} + margin {1} = {2}" },
-        "toast_zscore_changed":  { zh: "安全边际已设置为 {0}", en: "Safety margin set to {0}" },
-        "toast_guzzling_changed":{ zh: "暴饮袋等级已设置为 {0}", en: "Guzzling pouch level set to {0}" },
+        "s_zscore": { zh: "安全边际", en: "Safety Margin" },
+        "s_zscore_desc": { zh: "工匠茶概率模型 Z-score（越高越安全，推荐95%）", en: "Artisan tea Z-score (higher = safer, 95% recommended)" },
+        "s_zscore_none": { zh: "关闭（线性）", en: "Off (linear)" },
+        "s_guzzling": { zh: "暴饮袋等级", en: "Guzzling Pouch" },
+        "s_guzzling_desc": { zh: "暴饮袋强化等级（影响工匠茶浓缩倍率）", en: "Guzzling pouch enhancement level (affects tea concentration)" },
+        "s_guzzling_auto": { zh: "自动检测", en: "Auto-detect" },
+        "zscore_tag": { zh: "Z={0}", en: "Z={0}" },
+        "zscore_hover": { zh: "期望 {0} + 余量 {1} = {2}", en: "Expected {0} + margin {1} = {2}" },
+        "toast_zscore_changed": { zh: "安全边际已设置为 {0}", en: "Safety margin set to {0}" },
+        "toast_guzzling_changed": { zh: "暴饮袋等级已设置为 {0}", en: "Guzzling pouch level set to {0}" },
+
+        // ── v1.4.4: 余量标记 ──
+        "surplus_n": { zh: "余{0}", en: "+{0}" },
 
         // ── v1.4.3: 配方链递归解算 ──
-        "add_chain":             { zh: "加入全链材料", en: "Add Full Chain" },
-        "chain_title":           { zh: "升级链 ({0}步)", en: "Upgrade Chain ({0} steps)" },
-        "chain_current":         { zh: "当前", en: "Current" },
-        "chain_step_from":       { zh: "升级自", en: "From" },
-        "chain_tail":            { zh: "链尾", en: "Base" },
-        "chain_upgrade_tag":     { zh: "升级", en: "Upgrade" },
-        "toast_chain_added":     { zh: "已加入完整配方链：{0} 种原始材料，数量 {1}", en: "Added full chain: {0} leaf materials, qty {1}" },
+        "add_chain": { zh: "加入全链材料", en: "Add Full Chain" },
+        "chain_title": { zh: "升级链 ({0}步)", en: "Upgrade Chain ({0} steps)" },
+        "chain_current": { zh: "当前", en: "Current" },
+        "chain_step_from": { zh: "升级自", en: "From" },
+        "chain_tail": { zh: "链尾", en: "Base" },
+        "chain_upgrade_tag": { zh: "升级", en: "Upgrade" },
+        "toast_chain_added": { zh: "已加入完整配方链：{0} 种原始材料，数量 {1}", en: "Added full chain: {0} leaf materials, qty {1}" },
 
         // ── v1.4.3: 任务面板 ──
-        "s_quest_tracking":      { zh: "任务追踪", en: "Task Tracking" },
+        "s_quest_tracking": { zh: "任务追踪", en: "Task Tracking" },
         "s_quest_tracking_desc": { zh: "在购物车中显示生产类任务面板", en: "Show production task panel in cart drawer" },
-        "quest_panel_title":     { zh: "生产任务", en: "Production Tasks" },
-        "quest_no_tasks":        { zh: "暂无生产任务", en: "No production tasks" },
-        "quest_add_missing":     { zh: "补缺料", en: "Add Missing" },
-        "quest_create_plan":     { zh: "建计划", en: "Plan" },
-        "quest_goto_craft":      { zh: "前往", en: "Go" },
-        "quest_remaining":       { zh: "还需 {0} 次", en: "{0} remaining" },
-        "toast_quest_added":     { zh: "已添加任务材料：{0} 种", en: "Added quest materials: {0} types" },
-        "toast_quest_plan":      { zh: "已为任务创建计划：{0}", en: "Created plan for quest: {0}" },
+        "quest_panel_title": { zh: "生产任务", en: "Production Tasks" },
+        "quest_no_tasks": { zh: "暂无生产任务", en: "No production tasks" },
+        "quest_add_missing": { zh: "补缺料", en: "Add Missing" },
+        "quest_create_plan": { zh: "建计划", en: "Plan" },
+        "quest_goto_craft": { zh: "前往", en: "Go" },
+        "quest_remaining": { zh: "还需 {0} 次", en: "{0} remaining" },
+        "toast_quest_added": { zh: "已添加任务材料：{0} 种", en: "Added quest materials: {0} types" },
+        "toast_quest_plan": { zh: "已为任务创建计划：{0}", en: "Created plan for quest: {0}" },
     };
 
     /**
@@ -680,10 +684,10 @@
 
     // ── v1.4.3: Z-score 安全边际常量与计算模块 ──────────────────
     const Z_OPTIONS = [
-        { label: "none",  z: 0 },
+        { label: "none", z: 0 },
         { label: "84.1%", z: 1.0 },
-        { label: "95%",   z: 1.645 },
-        { label: "99%",   z: 2.326 },
+        { label: "95%", z: 1.645 },
+        { label: "99%", z: 2.326 },
         { label: "99.9%", z: 3.090 }
     ];
 
@@ -1178,16 +1182,19 @@
                 const zVal = _zScoreCalc.getActiveZ();
                 const upgradeHrid = _dataLayer._upgradeChainMap?.get(currentHrid) || null;
 
-                // 收集非升级材料（套 artisan + z-score）
+                // 收集非升级材料（套 artisan + z-score；金币跳过偏移）
                 const materials = [];
                 for (const inp of action.inputItems || []) {
                     const isUpgrade = upgradeHrid && inp.itemHrid === upgradeHrid && (inp.count || 1) === 1;
                     if (isUpgrade) continue; // 1:1 升级前代，不购买，沿链继续
-                    const needed = _zScoreCalc.calcMaterials(inp.count || 1, craftRuns, artisanBuff, zVal).total;
+                    const inpBareId = inp.itemHrid.replace(/^\/items\//, "");
+                    const needed = isCoinItem(inpBareId)
+                        ? Math.ceil((inp.count || 1) * craftRuns - 1e-9)
+                        : _zScoreCalc.calcMaterials(inp.count || 1, craftRuns, artisanBuff, zVal).total;
                     materials.push({
                         hrid: inp.itemHrid,
                         qty: needed,
-                        name: _dataLayer.hridToName(inp.itemHrid) || inp.itemHrid.replace(/^\/items\//, "")
+                        name: _dataLayer.hridToName(inp.itemHrid) || inpBareId
                     });
                 }
 
@@ -1374,8 +1381,11 @@
             }
         });
 
-        console.log("[mwi-mm] v1.4.3 WebSocket interceptor registered (lang=" + _currentLang + ")");
+        console.log("[mwi-mm] v1.4.6 WebSocket interceptor registered (lang=" + _currentLang + ")");
     }
+
+    // ★ v1.4.5: 尽早安装 WS 拦截器（不依赖 DOM，避免 document-idle 时错过 init_character_data）
+    setupWSInterceptor();
 
     // ── 工具函数 ──────────────────────────────────────────────────
 
@@ -2143,9 +2153,11 @@
         const raw = getInventoryCount(itemId);
         if (!STATE.craftingPlansEnabled || !STATE.craftingPlans.size) return raw;
         const bareId = normalizeCartItemId(itemId);
+        // v1.4.6: excludeRecipeHrid 可以是 string 或 Set<string>
+        const isSet = excludeRecipeHrid instanceof Set;
         let locked = 0;
         for (const plan of STATE.craftingPlans.values()) {
-            if (plan.recipeHrid === excludeRecipeHrid) continue;
+            if (isSet ? excludeRecipeHrid.has(plan.recipeHrid) : plan.recipeHrid === excludeRecipeHrid) continue;
             if (plan.status === "completed") continue;
             locked += plan.materials[bareId] || 0;
         }
@@ -2718,10 +2730,18 @@
             const name = _dataLayer.hridToName(input.itemHrid) || getItemName(requirementItems[index]?.querySelector(SEL.itemCore), bareId);
             // ★ v1.3.5: 使用有效库存（扣除其他计划的锁定量）
             const currentStock = getEffectiveInventory(bareId, recipeHrid);
-            // ★ v1.4.3: Z-score 概率模型替代线性扣减
+            // ★ v1.4.4: 金币不参与 artisan/Z-score 偏移计算（工匠茶不减免金币）
+            const coinItem = isCoinItem(bareId);
             const zVal = _zScoreCalc.getActiveZ();
-            const { expected: _zExpected, margin: _zMargin, total: _zTotal } = _zScoreCalc.calcMaterials(input.count, actionCount.value, artisanBuff, zVal);
-            const needPerAction = input.count * (1 - artisanBuff); // 保留用于显示
+            let _zExpected, _zMargin, _zTotal, needPerAction;
+            if (coinItem) {
+                const linear = Math.ceil(input.count * actionCount.value - 1e-9);
+                _zExpected = linear; _zMargin = 0; _zTotal = linear;
+                needPerAction = input.count;
+            } else {
+                ({ expected: _zExpected, margin: _zMargin, total: _zTotal } = _zScoreCalc.calcMaterials(input.count, actionCount.value, artisanBuff, zVal));
+                needPerAction = input.count * (1 - artisanBuff);
+            }
             const totalNeeded = _zExpected;
             const totalNeededCeil = _zTotal;
             const missing = Math.max(0, totalNeededCeil - currentStock);
@@ -2730,7 +2750,7 @@
                 type: "material", index, itemId: bareId, name, currentStock,
                 needPerAction, totalNeeded, missing, missingRounded: missing,
                 canAddToCart: true, iconRef: input.itemHrid,
-                _zExpected, _zMargin, _zTotal,
+                _zExpected, _zMargin, _zTotal, _isCoin: coinItem,
                 itemWrap: requirementItems[index] || null,
                 inventoryEl: inventoryEls[index] || null,
                 inputEl: inputEls[index] || null
@@ -2955,19 +2975,33 @@
             const zActive = _zScoreCalc.getActiveZ() > 0 && data._artisanBuff > 0;
             for (const row of data.requirements) {
                 if (!row.inputEl) continue;
-                // v1.4.3: Z-score 激活时，badge 显示 「缺 expected⁺margin」 格式
-                let badgeText;
-                if (zActive && row._zMargin > 0) {
-                    const missingBase = Math.max(0, row._zExpected - row.currentStock);
-                    badgeText = ` ${t("shortage_n", formatQty(missingBase))}⁺${formatQty(row._zMargin)}`;
+                // v1.4.4: 金币行跳过 badge（金币提醒已在摘要面板显示）
+                if (row._isCoin || isCoinItem(row.itemId)) { activeEls.add(row.inputEl); continue; }
+                let badgeText, badgeType;
+                if (row.missingRounded > 0) {
+                    // 缺料 badge
+                    if (zActive && row._zMargin > 0) {
+                        const missingBase = Math.max(0, row._zExpected - row.currentStock);
+                        badgeText = ` ${t("shortage_n", formatQty(missingBase))}⁺${formatQty(row._zMargin)}`;
+                    } else {
+                        badgeText = ` ${t("shortage_n", formatQty(row.missingRounded))}`;
+                    }
+                    badgeType = "missing";
                 } else {
-                    badgeText = ` ${t("shortage_n", formatQty(row.missingRounded))}`;
+                    // v1.4.4: 余量 badge — 显示做完后还剩多少
+                    const surplus = row.currentStock - Math.ceil((row._zTotal || row.totalNeeded) - 1e-9);
+                    if (surplus > 0) {
+                        badgeText = ` ${t("surplus_n", formatQty(surplus))}`;
+                        badgeType = "surplus";
+                    } else {
+                        badgeText = ` ${t("surplus_n", "0")}`;
+                        badgeType = "ok";
+                    }
                 }
-                const badgeType = row.missingRounded > 0 ? "missing" : "ok";
                 if (row.inputEl.getAttribute("data-mm-badge") !== badgeText) row.inputEl.setAttribute("data-mm-badge", badgeText);
                 if (row.inputEl.getAttribute("data-mm-badge-type") !== badgeType) row.inputEl.setAttribute("data-mm-badge-type", badgeType);
                 // hover 保留完整公式说明
-                if (zActive && row._zMargin > 0) {
+                if (zActive && row._zMargin > 0 && row.missingRounded > 0) {
                     const hoverText = t("zscore_hover", row._zExpected, row._zMargin, row._zTotal);
                     if (row.inputEl.getAttribute("title") !== hoverText) row.inputEl.setAttribute("title", hoverText);
                 } else {
@@ -2978,8 +3012,16 @@
             if (data.upgrade && STATE.includeUpgrade) {
                 const container = data.upgrade.container || data.upgrade.countEl?.closest(SEL.upgradeContainer) || modal.querySelector(SEL.upgradeContainer);
                 if (container) {
-                    const newText = t("shortage_n", formatQty(data.upgrade.missingRounded));
-                    const isMissing = data.upgrade.missingRounded > 0;
+                    const upgIsMissing = data.upgrade.missingRounded > 0;
+                    let newText, upgType;
+                    if (upgIsMissing) {
+                        newText = t("shortage_n", formatQty(data.upgrade.missingRounded));
+                        upgType = "missing";
+                    } else {
+                        const upgSurplus = (data.upgrade.currentStock || 0) - Math.ceil((data.upgrade.totalNeeded || 0) - 1e-9);
+                        newText = upgSurplus > 0 ? t("surplus_n", formatQty(upgSurplus)) : t("surplus_n", "0");
+                        upgType = upgSurplus > 0 ? "surplus" : "ok";
+                    }
                     let inline = container.querySelector(".mwi-mm-upgrade-inline");
                     if (!inline) {
                         inline = document.createElement("div");
@@ -2989,8 +3031,11 @@
                         else container.appendChild(inline);
                     }
                     if (inline.textContent !== newText) inline.textContent = newText;
-                    const hasMissing = inline.classList.contains("is-missing");
-                    if (hasMissing !== isMissing) { inline.classList.toggle("is-missing", isMissing); inline.classList.toggle("is-ok", !isMissing); }
+                    const hadMissing = inline.classList.contains("is-missing");
+                    const hadSurplus = inline.classList.contains("is-surplus");
+                    if (upgType === "missing") { if (!hadMissing) { inline.classList.add("is-missing"); inline.classList.remove("is-ok", "is-surplus"); } }
+                    else if (upgType === "surplus") { if (!hadSurplus) { inline.classList.add("is-surplus"); inline.classList.remove("is-missing", "is-ok"); } }
+                    else { if (hadMissing || hadSurplus) { inline.classList.add("is-ok"); inline.classList.remove("is-missing", "is-surplus"); } }
                     activeEls.add(inline);
                 }
             }
@@ -3030,6 +3075,12 @@
         }
         const steps = _recipeChain.getChainSteps(data._outputItemHrid, data.actionCount?.value || 1);
         if (!steps.length) { container.remove(); return; }
+        // ★ v1.4.6: 收集本链所有步骤的 action HRID，显示库存时排除自身链的锁定
+        const chainExcludeSet = new Set();
+        for (const step of steps) {
+            const act = _dataLayer._outputToAction?.get(step.stepHrid);
+            if (act?.hrid) chainExcludeSet.add(act.hrid);
+        }
         const arrow = STATE.chainTreeOpen ? "▼" : "▶";
         const bodyDisplay = STATE.chainTreeOpen ? "" : "none";
         let html = `<div class="mwi-mm-chain-title"><span>${t("chain_title", steps.length)}</span><button class="mwi-mm-chain-toggle"><span class="mwi-mm-chain-arrow">${arrow}</span></button></div>`;
@@ -3039,15 +3090,17 @@
             const isFirst = i === 0;
             const isLast = !step.upgradeFromHrid;
             const stepLabel = isFirst ? t("chain_current") : (isLast ? t("chain_tail") : t("chain_step_from"));
-            html += `<tr class="mwi-mm-chain-step-head"><td colspan="3">${escapeHtml(step.stepName)} <span class="mwi-mm-chain-upgrade">${stepLabel}</span> ×${step.craftRuns}</td></tr>`;
+            html += `<tr class="mwi-mm-chain-step-head"><td colspan="3"><label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="mwi-mm-chain-step-cb" data-step-index="${i}" checked style="cursor:pointer">${escapeHtml(step.stepName)} <span class="mwi-mm-chain-upgrade">${stepLabel}</span> ×${step.craftRuns}</label></td></tr>`;
             for (const mat of step.materials) {
                 const bareId = mat.hrid.replace(/^\/items\//, "");
-                const stock = getEffectiveInventory(bareId, data._recipeHrid);
+                const stock = getEffectiveInventory(bareId, chainExcludeSet);
                 const missing = Math.max(0, mat.qty - stock);
-                const cls = missing > 0 ? "is-missing" : "is-ok";
+                const surplus = missing === 0 ? stock - mat.qty : 0;
+                const cls = missing > 0 ? "is-missing" : (surplus > 0 ? "is-surplus" : "is-ok");
+                const statusText = missing > 0 ? t("shortage_n", formatQty(missing)) : t("surplus_n", formatQty(surplus));
                 html += `<tr class="mwi-mm-chain-row ${cls}"><td class="mwi-mm-chain-name">${escapeHtml(mat.name)}</td>` +
                     `<td class="mwi-mm-chain-qty">${formatQty(mat.qty)}</td>` +
-                    `<td class="mwi-mm-chain-stock">(${t("shortage_n", formatQty(missing))})</td></tr>`;
+                    `<td class="mwi-mm-chain-stock">(${statusText})</td></tr>`;
             }
         }
         html += `</table>`;
@@ -3158,18 +3211,57 @@
             setAction(t("action_added_to_cart")); renderCart(); openCartDrawer();
         });
 
-        // v1.4.3: 「加入全链材料」按钮 — 升级链全步骤叶子材料汇总
+        // v1.4.3: 「加入全链材料」按钮 — 升级链全步骤叶子材料汇总（v1.4.5: 复选框筛选；v1.4.6: 逐步计划）
         panel.querySelector('button[data-act="add-chain"]')?.addEventListener("click", () => {
             const latestData = panel._latestData || data;
             if (!latestData._dataLayerUsed || !latestData._outputItemHrid) return;
-            // 获取全链叶子材料（所有步骤的非升级材料汇总）
-            const leafMap = _recipeChain.getLeafMaterials(latestData._outputItemHrid, latestData.actionCount?.value || 1);
-            const cartItems = _recipeChain.toCartItems(leafMap, latestData._recipeHrid);
+            // 收集勾选的步骤索引
+            const chainTree = panel.querySelector(".mwi-mm-chain-tree");
+            const checkedSet = new Set();
+            if (chainTree) {
+                chainTree.querySelectorAll(".mwi-mm-chain-step-cb").forEach(cb => {
+                    if (cb.checked) checkedSet.add(Number(cb.dataset.stepIndex));
+                });
+            }
+            // 获取全链步骤，只汇总勾选的步骤材料
+            const steps = _recipeChain.getChainSteps(latestData._outputItemHrid, latestData.actionCount?.value || 1);
+            const leafMap = new Map();
+            // ★ v1.4.6: 收集所有勾选步骤的 action HRID，用于排除自身链计划
+            const chainExcludeSet = new Set();
+            for (let i = 0; i < steps.length; i++) {
+                if (checkedSet.size > 0 && !checkedSet.has(i)) continue;
+                const stepAction = _dataLayer._outputToAction?.get(steps[i].stepHrid);
+                if (stepAction?.hrid) chainExcludeSet.add(stepAction.hrid);
+                for (const mat of steps[i].materials) {
+                    leafMap.set(mat.hrid, (leafMap.get(mat.hrid) || 0) + mat.qty);
+                }
+            }
+            // toCartItems 排除本链所有步骤的计划，避免自身锁定导致误算
+            const cartItems = _recipeChain.toCartItems(leafMap, chainExcludeSet);
             let addedQty = 0, addedTypes = 0;
             for (const item of cartItems) {
                 addToCart({ itemId: item.itemId, name: item.name, iconRef: item.iconRef, quantity: item.missing, source: "material" });
                 addedQty += item.missing;
                 addedTypes += 1;
+            }
+            // ★ v1.4.6: 为每个勾选步骤创建独立制作计划（路过产物也有计划，锁定各步库存）
+            if (STATE.craftingPlansEnabled) {
+                for (let i = 0; i < steps.length; i++) {
+                    if (checkedSet.size > 0 && !checkedSet.has(i)) continue;
+                    const step = steps[i];
+                    const stepAction = _dataLayer._outputToAction?.get(step.stepHrid);
+                    const stepRecipeHrid = stepAction?.hrid;
+                    if (!stepRecipeHrid) continue;
+                    const stepPlanItems = [];
+                    for (const mat of step.materials) {
+                        const bareId = mat.hrid.replace(/^\/items\//, "");
+                        if (isCoinItem(bareId)) continue;
+                        stepPlanItems.push({ itemId: bareId, totalNeeded: mat.qty });
+                    }
+                    if (stepPlanItems.length > 0 || STATE.craftingPlans.has(stepRecipeHrid)) {
+                        createOrUpdatePlan(stepRecipeHrid, step.stepName, step.craftRuns, stepPlanItems);
+                    }
+                }
             }
             if (addedTypes > 0) {
                 showToast(t("toast_chain_added", addedTypes, formatQty(addedQty)), "success");
@@ -3816,11 +3908,11 @@
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_crafting_plans")}</div><div class="mwi-mm-settings-desc">${t("s_crafting_plans_desc")}</div></div><button data-act="toggle-crafting-plans" class="mwi-mm-toggle-btn"></button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_quest_tracking")}</div><div class="mwi-mm-settings-desc">${t("s_quest_tracking_desc")}</div></div><button data-act="toggle-quest-tracking" class="mwi-mm-toggle-btn"></button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_zscore")}</div><div class="mwi-mm-settings-desc">${t("s_zscore_desc")}</div></div><select data-act="change-zscore" class="mwi-mm-select">${Z_OPTIONS.map((opt, i) => `<option value="${i}"${i === STATE.zScoreIndex ? " selected" : ""}>${i === 0 ? t("s_zscore_none") : opt.label}</option>`).join("")}</select></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_guzzling")}</div><div class="mwi-mm-settings-desc">${t("s_guzzling_desc")}</div></div><select data-act="change-guzzling" class="mwi-mm-select"><option value="-1"${STATE.guzzlingPouchLevel === -1 ? " selected" : ""}>${t("s_guzzling_auto")}</option>${Array.from({length: 21}, (_, i) => `<option value="${i}"${STATE.guzzlingPouchLevel === i ? " selected" : ""}>+${i}</option>`).join("")}</select></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_guzzling")}</div><div class="mwi-mm-settings-desc">${t("s_guzzling_desc")}</div></div><select data-act="change-guzzling" class="mwi-mm-select"><option value="-1"${STATE.guzzlingPouchLevel === -1 ? " selected" : ""}>${t("s_guzzling_auto")}</option>${Array.from({ length: 21 }, (_, i) => `<option value="${i}"${STATE.guzzlingPouchLevel === i ? " selected" : ""}>+${i}</option>`).join("")}</select></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_manual_sync")}</div><div class="mwi-mm-settings-desc">${t("s_manual_sync_desc")}</div></div><button data-act="manual-sync" class="mwi-mm-toggle-btn" style="font-size:12px">${t("s_manual_sync_btn")}</button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_reset_size")}</div><div class="mwi-mm-settings-desc">${t("s_reset_size_desc")}</div></div><button data-act="reset-size" class="mwi-mm-toggle-btn" style="font-size:12px">${t("s_reset_btn")}</button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_language")}</div><div class="mwi-mm-settings-desc">${t("s_language_desc")}</div></div><button data-act="toggle-lang" class="mwi-mm-toggle-btn" style="font-size:12px">${_currentLang === "zh" ? t("s_lang_zh") : t("s_lang_en")}</button></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_data_source")}</div><div class="mwi-mm-settings-desc mwi-mm-ws-status">${_wsInventory.ready ? t("ws_status_ok", _wsInventory._detailMap?.size || 0) : t("ws_status_wait")} · ${_dataLayer.ready ? t("dl_status_ok", _dataLayer._outputToAction?.size || 0, "") : t("dl_status_wait")}</div></div></div>
+                    <div class="mwi-mm-settings-row" style="justify-content:center;padding:10px 4px;gap:8px;"><button data-act="open-guide" class="mwi-mm-toggle-btn" style="flex:1;font-size:12px">${t("s_guide_btn")}</button><button data-act="open-community" class="mwi-mm-toggle-btn" style="flex:1;font-size:12px">${t("s_community_btn")}</button></div>
                 </div>
             </div>
             <div class="mwi-mm-quest-panel" style="display:none;"></div>
@@ -4233,7 +4325,8 @@
                 let addedTypes = 0;
                 for (const input of action.inputItems) {
                     const isUpgrade = action.upgradeItemHrid && input.itemHrid === action.upgradeItemHrid;
-                    const needed = isUpgrade ? runs : _zScoreCalc.calcMaterials(input.count, runs, artisanBuff, zVal).total;
+                    const qBareId = input.itemHrid.replace(/^\/items\//, "");
+                    const needed = isUpgrade ? runs : (isCoinItem(qBareId) ? Math.ceil(input.count * runs - 1e-9) : _zScoreCalc.calcMaterials(input.count, runs, artisanBuff, zVal).total);
                     const bareId = input.itemHrid.replace(/^\/items\//, "");
                     const stock = getEffectiveInventory(bareId, actionHrid);
                     const missing = Math.max(0, needed - stock);
@@ -4327,6 +4420,18 @@
                 resetDrawerSize();
                 resetPlansPanelPosition();
                 showToast(t("toast_reset_done"), "info");
+                return;
+            }
+
+            // v1.4.5: 使用说明
+            if (act === "open-guide") {
+                window.open("https://mate.colacola.cloud/guide?lang=" + _currentLang, "_blank");
+                return;
+            }
+
+            // v1.4.3: 反馈与支持
+            if (act === "open-community") {
+                window.open("https://mate.colacola.cloud/community?v=" + SCRIPT.version + "&lang=" + _currentLang, "_blank");
                 return;
             }
 
@@ -5419,7 +5524,7 @@
     /** 注入插件所有 CSS 样式 */
     function injectStyles() {
         const style = document.createElement("style");
-        style.textContent = `[data-mm-badge]::after{content:attr(data-mm-badge);margin-left:6px;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;display:inline-block;line-height:1.5;vertical-align:middle}[data-mm-badge-type="missing"]::after{color:#e88e98;background:rgba(180,50,70,.18)}[data-mm-badge-type="ok"]::after{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15)}.mwi-mm-upgrade-badge{margin-left:8px;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;display:inline-block;line-height:1.5}.mwi-mm-upgrade-badge.is-missing{color:#e88e98;background:rgba(180,50,70,.18)}.mwi-mm-upgrade-badge.is-ok{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15)}.mwi-mm-upgrade-inline{margin-top:4px;display:inline-block;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;line-height:1.5}.mwi-mm-upgrade-inline.is-missing{color:#e88e98;background:rgba(180,50,70,.18);border:none}.mwi-mm-upgrade-inline.is-ok{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15);border:none}.mwi-mm-summary-panel{margin:6px 0 2px;padding:10px 2px 0;border-radius:0;background:transparent!important;border:none!important;border-top:1px solid rgba(255,255,255,.06)!important;color:inherit!important;font-size:13px;box-shadow:none}.mwi-mm-summary-head{display:flex;justify-content:center;align-items:center;margin-bottom:6px}.mwi-mm-summary-head .stat{color:rgba(255,255,255,.55)!important;font-size:12px;font-weight:500}.mwi-mm-manual-count-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 4px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:6px}.mwi-mm-manual-label{color:rgba(255,255,255,.7)!important;font-size:12px;font-weight:500;white-space:nowrap;flex-shrink:0}.mwi-mm-manual-input{width:90px;padding:3px 6px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:13px;font-weight:600;outline:none;transition:border-color .2s;-moz-appearance:textfield}.mwi-mm-manual-input::-webkit-inner-spin-button,.mwi-mm-manual-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.mwi-mm-manual-input:focus{border-color:rgba(99,140,255,.6)}.mwi-mm-summary-buttons{margin-top:4px;display:flex;gap:8px}.mwi-mm-summary-buttons button{flex:1;cursor:pointer}#mwi-mm-cart-tab{position:fixed;left:calc(100vw - 70px);top:42vh;z-index:2147482200;width:52px;height:52px;border:1px solid #3a3a45;background:rgba(30,30,36,.96);color:#c8cfde;border-radius:14px;padding:0;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;cursor:pointer;isolation:isolate;box-shadow:0 8px 22px rgba(0,0,0,.45);transition:border-color .2s,color .2s,box-shadow .2s,background-color .2s}#mwi-mm-cart-tab::after{content:"";position:absolute;inset:0;border-radius:14px;background:transparent;box-shadow:0 0 12px 2px #fff;z-index:-1;opacity:.1;pointer-events:none;animation:mwi-mm-fab-breathe 6.2s ease-in-out infinite}#mwi-mm-cart-tab.is-open{border-color:#5b8cff;color:#f0f5ff;background:rgba(34,40,54,.98)}#mwi-mm-cart-tab.is-open::after{opacity:.16}@keyframes mwi-mm-fab-breathe{0%{transform:scale(1);opacity:.05}50%{transform:scale(1.02);opacity:.12}100%{transform:scale(1);opacity:.05}}#mwi-mm-cart-tab:active{cursor:grabbing}#mwi-mm-cart-tab .mwi-mm-fab-icon{width:24px;height:24px;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;fill:none}#mwi-mm-cart-tab .mwi-mm-fab-badge{position:absolute;right:-6px;top:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;border:1px solid rgba(0,0,0,.45);font-size:10px;font-weight:700;line-height:1;display:none;align-items:center;justify-content:center}#mwi-mm-cart-drawer{position:fixed;left:calc(100vw - 406px);top:8%;width:390px;max-width:calc(100vw - 20px);max-height:84vh;z-index:2147482201;background:#1b1d24;color:#e4e6ee;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 18px 36px rgba(0,0,0,.56);overflow:hidden;display:none;flex-direction:column;font-family:"Microsoft YaHei","PingFang SC",sans-serif}#mwi-mm-cart-drawer.is-resizing{user-select:none;transition:none!important}.mwi-mm-cart-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid #2e323d;background:#20232d;user-select:none;cursor:grab;touch-action:none;flex-shrink:0;position:relative}.mwi-mm-cart-head:active{cursor:grabbing}.mwi-mm-close-btn{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:6px;padding:3px 5px;flex-shrink:0;white-space:nowrap;font-size:11px;transition:color .2s,background-color .2s,border-color .2s}.mwi-mm-close-btn:hover{color:#edf2ff;background:rgba(148,163,184,.18);border-color:#555a72}.mwi-mm-cart-head .title{font-size:14px;font-weight:600;letter-spacing:.5px;color:#fff;white-space:nowrap}.mwi-mm-cart-head .ops{display:flex;flex-wrap:wrap;gap:4px}.mwi-mm-cart-head .ops button{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;white-space:nowrap;transition:color .2s,border-color .2s,background-color .2s}.mwi-mm-cart-head .ops button:hover{background:rgba(148,163,184,.18);color:#edf2ff}.mwi-mm-cart-head .ops button[data-act="toggle-settings"].is-on{border-color:rgba(91,140,255,.5);background:rgba(91,140,255,.18);color:#b9ccff}.mwi-mm-settings-panel{padding:0;background:rgba(255,255,255,.015);min-height:0;flex:1;overflow:hidden;display:none;flex-direction:column}.mwi-mm-settings-scroll{flex:1;min-height:0;overflow-y:auto;padding:8px 10px}.mwi-mm-settings-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.04)}.mwi-mm-settings-row:last-child{border-bottom:none}.mwi-mm-settings-info{flex:1;min-width:0}.mwi-mm-settings-label{font-size:12.5px;font-weight:600;color:#e4e6ee;line-height:1.4}.mwi-mm-settings-desc{font-size:10.5px;color:#6b7280;line-height:1.45;margin-top:1px}.mwi-mm-toggle-btn{flex-shrink:0;min-width:36px;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid;transition:all .2s;text-align:center}.mwi-mm-toggle-btn.is-on{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.18);color:#86efac}.mwi-mm-toggle-btn.is-off{border-color:rgba(120,129,145,.45);background:rgba(120,129,145,.1);color:#8b90a8}.mwi-mm-toggle-btn:hover{filter:brightness(1.15)}.mwi-mm-select{flex-shrink:0;min-width:80px;padding:3px 6px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(120,129,145,.45);background:rgba(120,129,145,.1);color:#c8cfde;outline:none;transition:all .2s;font-family:inherit}.mwi-mm-select:hover{border-color:rgba(91,140,255,.4);background:rgba(91,140,255,.08)}.mwi-mm-select:focus{border-color:rgba(91,140,255,.6)}.mwi-mm-select option{background:#1b1d24;color:#e4e6ee}.mwi-mm-chain-btn{position:absolute;right:-2px;top:-2px;width:16px;height:16px;border:1px solid rgba(99,140,255,.4);background:rgba(99,140,255,.12);color:#93c5fd;border-radius:3px;font-size:8px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:5;transition:all .15s}.mwi-mm-chain-btn:hover{background:rgba(99,140,255,.25);border-color:rgba(99,140,255,.6);color:#fff}.mwi-mm-chain-tree{margin:6px 0;padding:4px 0;border-top:1px dashed rgba(255,255,255,.06);border-bottom:1px dashed rgba(255,255,255,.06);font-size:12.5px;max-height:280px;overflow-y:auto;text-align:left}.mwi-mm-chain-title{font-size:12.5px;font-weight:600;color:#93c5fd;padding:2px 4px 4px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#1b1d24;z-index:1}.mwi-mm-chain-toggle{border:1px solid rgba(99,140,255,.3);background:rgba(99,140,255,.1);color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;transition:all .15s;line-height:1.4}.mwi-mm-chain-toggle:hover{background:rgba(99,140,255,.22);border-color:rgba(99,140,255,.5)}.mwi-mm-chain-body{width:100%;border-collapse:collapse;font-size:12.5px}.mwi-mm-chain-step-head td{padding:5px 4px 2px;font-weight:600;color:#c8cfde;font-size:12.5px}.mwi-mm-chain-row td{padding:2px 4px}.mwi-mm-chain-row td.mwi-mm-chain-name{padding-left:18px;color:#e4e6ee}.mwi-mm-chain-row td.mwi-mm-chain-qty{color:#f8c86b;font-weight:600;text-align:right;white-space:nowrap;width:50px;font-variant-numeric:tabular-nums}.mwi-mm-chain-row td.mwi-mm-chain-stock{text-align:right;white-space:nowrap;width:52px;font-size:11px;font-variant-numeric:tabular-nums}.mwi-mm-chain-row.is-missing td.mwi-mm-chain-stock{color:#e88e98}.mwi-mm-chain-row.is-ok td.mwi-mm-chain-stock{color:rgba(110,200,150,.7)}.mwi-mm-chain-upgrade{font-size:10px;color:#fbbf24;background:rgba(251,191,36,.12);padding:1px 4px;border-radius:2px;margin-left:4px}.mwi-mm-chain-craftable{color:#60a5fa;font-size:9px;margin-left:1px}.mwi-mm-quest-panel{padding:0 8px;border-bottom:1px solid #2e323d;max-height:200px;overflow-y:auto}.mwi-mm-quest-title{font-size:12px;font-weight:600;color:#93c5fd;padding:6px 0 4px;display:flex;align-items:center;gap:4px}.mwi-mm-quest-empty{color:#6b7280;text-align:center;padding:8px;font-size:11px}.mwi-mm-quest-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:3px}.mwi-mm-quest-row:last-child{border-bottom:none}.mwi-mm-quest-info{display:flex;justify-content:space-between;align-items:center}.mwi-mm-quest-name{font-size:12px;color:#e4e6ee;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-mm-quest-progress{font-size:11px;color:#f8c86b;font-weight:600;flex-shrink:0;margin-left:6px}.mwi-mm-quest-bar{height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}.mwi-mm-quest-bar-fill{height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:2px;transition:width .3s}.mwi-mm-quest-ops{display:flex;gap:4px}.mwi-mm-quest-ops button{flex:1;padding:2px 4px;border:1px solid #3a3a45;background:rgba(148,163,184,.08);color:#a7adbc;border-radius:4px;font-size:10px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}.mwi-mm-quest-ops button:hover{background:rgba(148,163,184,.18);color:#edf2ff;border-color:#555a72}.quest-toggle-btn{border:1px solid #3a3a45!important;background:rgba(148,163,184,.1)!important;color:#a7adbc!important;border-radius:6px!important;padding:3px 5px!important;cursor:pointer!important;display:flex!important;align-items:center;justify-content:center;transition:all .2s!important}.quest-toggle-btn:hover{background:rgba(148,163,184,.18)!important;color:#edf2ff!important}.quest-toggle-btn.is-on{border-color:rgba(91,140,255,.5)!important;background:rgba(91,140,255,.18)!important;color:#b9ccff!important}.mwi-mm-cart-search-row{padding:6px 8px;border-bottom:1px solid #2e323d;flex-shrink:0}.mwi-mm-cart-search{width:100%;padding:5px 10px;border:1px solid #2e324a;border-radius:6px;background:#0d0f17;color:#c0c8d8;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s}.mwi-mm-cart-search::placeholder{color:#555a72}.mwi-mm-cart-search:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-cart-list{padding:6px 8px;flex:1;min-height:0;max-height:${CART_LIST_MAX_HEIGHT_DEFAULT}px;overflow:auto}#mwi-mm-cart-drawer.has-custom-size .mwi-mm-cart-list{max-height:none}.mwi-mm-cart-empty{color:#6b7280;text-align:center;padding:18px 6px;border:1px dashed #3a3a45;border-radius:8px;font-size:12px}.mwi-mm-cart-row{border:1px solid #2f323d;background:transparent;border-radius:8px;padding:6px 8px;margin-bottom:4px;display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:6px;transition:background-color .2s,border-color .2s}.mwi-mm-cart-row:hover{background-color:rgba(255,255,255,.02)}.mwi-mm-cart-row.is-target{border:2px solid #6f778c;box-shadow:0 0 0 1px rgba(111,119,140,.28);background:transparent}.mwi-mm-cart-row .icon-btn{width:40px;height:40px;border-radius:6px;border:1px solid #3a3a45;background:#2c2c35;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:border-color .2s,color .2s}.mwi-mm-cart-row .icon-btn:hover{border-color:#6b8cff}.mwi-mm-item-icon{width:28px;height:28px}.mwi-mm-icon-fallback{color:#8b8b9e;font-weight:700;font-size:13px}.mwi-mm-cart-row .meta{min-width:0;display:flex;flex-direction:column;gap:2px}.mwi-mm-cart-row .meta .name{color:#fff;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;min-width:0}.mwi-mm-cart-row .meta .name-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-mm-star-btn{flex-shrink:0;width:18px;height:18px;border:none;background:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:transform .15s}.mwi-mm-star-btn svg{fill:#3a3d4a;stroke:#555a72;stroke-width:1.5;transition:fill .2s,stroke .2s}.mwi-mm-star-btn:hover svg{fill:rgba(250,204,21,.25);stroke:#facc15}.mwi-mm-star-btn.is-starred svg{fill:#facc15;stroke:#facc15}.mwi-mm-star-btn:active{transform:scale(1.2)}.mwi-mm-cart-row .meta .qty{color:#9aa3b5;font-size:11px;line-height:1.35;letter-spacing:.1px;display:flex;align-items:center;gap:4px}.mwi-mm-qty-input{width:64px;padding:1px 4px;border:1px solid rgba(255,255,255,.12);border-radius:3px;background:rgba(0,0,0,.2);color:#f8c86b;font-weight:700;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s,background-color .2s;-moz-appearance:textfield}.mwi-mm-qty-input::-webkit-inner-spin-button,.mwi-mm-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.mwi-mm-qty-input:hover{border-color:rgba(255,255,255,.22)}.mwi-mm-qty-input:focus{border-color:rgba(91,140,255,.5);background:rgba(0,0,0,.35)}.mwi-mm-cart-row .ops{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:68px}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button{border-radius:5px;padding:3px 6px;font-size:11px;border:1px solid #3a3a45!important;background:#232834!important;color:#c7cfdd!important;cursor:pointer;transition:all .2s;min-width:0;font-weight:500}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.market-btn{border:1px solid #1e5a32!important;background:#143220!important;color:#a5d6a7!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.market-btn:hover{background:#1b452b!important;color:#fff!important;border-color:#277841!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.remove-btn{border:1px solid #6e2a30!important;background:#3b1b1e!important;color:#e59b9b!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.remove-btn:hover{background:#502125!important;color:#fff!important;border-color:#933840!important}.mwi-mm-market-target{outline:2px solid rgba(245,158,11,.9);outline-offset:1px;box-shadow:0 0 0 2px rgba(245,158,11,.28);border-radius:8px;animation:mwi-mm-pulse 1.4s ease-in-out infinite}@keyframes mwi-mm-pulse{0%{box-shadow:0 0 0 1px rgba(245,158,11,.15)}50%{box-shadow:0 0 0 3px rgba(245,158,11,.45)}100%{box-shadow:0 0 0 1px rgba(245,158,11,.15)}}.mwi-mm-toast{position:fixed;top:12px;right:12px;z-index:2147483300;padding:7px 10px;border-radius:8px;border:1px solid rgba(71,85,105,.8);color:#e2e8f0;background:rgba(15,23,42,.95);font-size:12px;transition:all .25s;box-shadow:0 10px 20px rgba(0,0,0,.35)}.mwi-mm-toast-success{border-color:rgba(16,185,129,.85);color:#d1fae5}.mwi-mm-toast-error{border-color:rgba(239,68,68,.85);color:#fecaca}.mwi-mm-resize-handle{position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;user-select:none;z-index:10;border-radius:0 0 12px 0}.mwi-mm-resize-handle::before{content:"";position:absolute;right:4px;bottom:4px;width:10px;height:10px;border-right:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);border-radius:0 0 2px 0;transition:border-color .2s}.mwi-mm-resize-handle:hover::before{border-right-color:rgba(255,255,255,.45);border-bottom-color:rgba(255,255,255,.45)}.mwi-mm-resize-handle:active::before{border-right-color:#5b8cff;border-bottom-color:#5b8cff}.mwi-mm-cart-head .ops button.pick-inv-btn{border-color:#2d6a4f;background:rgba(45,106,79,.18);color:#95d5b2}.mwi-mm-cart-head .ops button.pick-inv-btn:hover{background:rgba(45,106,79,.32);color:#fff}.mwi-mm-cart-head .ops button.pick-inv-btn.is-picking{border-color:#f59e0b;background:rgba(245,158,11,.22);color:#fcd34d;animation:mwi-mm-pick-pulse 1.2s ease-in-out infinite}@keyframes mwi-mm-pick-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}50%{box-shadow:0 0 0 3px rgba(245,158,11,.25)}}.mwi-mm-pick-mode [class*="Inventory_inventory"] [class*="Item_itemContainer"]{cursor:crosshair!important}.mwi-mm-pick-selected{outline:2px solid rgba(34,197,94,.9)!important;outline-offset:-1px;box-shadow:0 0 0 3px rgba(34,197,94,.25)!important;border-radius:6px;position:relative}.mwi-mm-pick-selected::after{content:"✓";position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#22c55e;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}.mwi-mm-pick-status-bar{position:fixed;bottom:0;left:0;right:0;z-index:2147483400;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 20px;background:rgba(15,23,42,.95);border-top:1px solid rgba(245,158,11,.5);backdrop-filter:blur(8px);font-size:13px;color:#e2e8f0}.mwi-mm-pick-status-text strong{color:#fcd34d;font-size:15px}.mwi-mm-pick-cancel-btn{padding:4px 14px;border:1px solid #6e2a30;background:#3b1b1e;color:#e59b9b;border-radius:6px;font-size:12px;cursor:pointer}.mwi-mm-pick-cancel-btn:hover{background:#502125;color:#fff}.mwi-mm-pick-modal{position:fixed;inset:0;z-index:2147483500;display:flex;align-items:center;justify-content:center}.mwi-mm-pick-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.mwi-mm-pick-modal-content{position:relative;width:340px;max-width:calc(100vw - 32px);max-height:80vh;background:#1b1d24;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}.mwi-mm-pick-modal-head{padding:14px 16px 10px;border-bottom:1px solid #2e323d}.mwi-mm-pick-modal-head .title{font-size:15px;font-weight:600;color:#fff}.mwi-mm-pick-modal-head .subtitle{font-size:11px;color:#6b7280;margin-top:2px}.mwi-mm-pick-modal-list{flex:1;min-height:0;overflow-y:auto;padding:8px 12px}.mwi-mm-pick-row{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04)}.mwi-mm-pick-row:last-child{border-bottom:none}.mwi-mm-pick-row-icon{width:28px;height:28px;flex-shrink:0}.mwi-mm-pick-row-icon .mwi-mm-item-icon{width:28px;height:28px}.mwi-mm-pick-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e4e6ee;font-size:13px}.mwi-mm-pick-qty{width:52px;padding:3px 6px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:13px;font-weight:600;text-align:center;outline:none;flex-shrink:0}.mwi-mm-pick-qty:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-pick-remove{width:22px;height:22px;border:none;background:rgba(239,68,68,.15);color:#f87171;border-radius:4px;font-size:12px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}.mwi-mm-pick-remove:hover{background:rgba(239,68,68,.35);color:#fff}.mwi-mm-pick-modal-foot{padding:10px 14px;border-top:1px solid #2e323d;display:flex;justify-content:flex-end;gap:6px}.mwi-mm-pick-modal-foot button{flex:1;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid;white-space:nowrap}.mwi-mm-pick-confirm-btn{border-color:#22c55e!important;background:rgba(34,197,94,.18)!important;color:#86efac!important}.mwi-mm-pick-confirm-btn:hover{background:rgba(34,197,94,.32)!important;color:#fff!important}.mwi-mm-pick-back-btn{border-color:#3a3a45!important;background:rgba(148,163,184,.1)!important;color:#a7adbc!important}.mwi-mm-pick-back-btn:hover{background:rgba(148,163,184,.18)!important;color:#edf2ff!important}.mwi-mm-cart-row.is-fulfilled{opacity:.45;border-color:#1e3a2a;background:rgba(52,211,153,.03)}.mwi-mm-fulfilled-tag{font-size:11px;color:#34d399;font-weight:500}.mwi-mm-qty-input.mwi-mm-qty-fulfilled{width:40px;opacity:.4;font-size:12px}.mwi-mm-qty-input.mwi-mm-qty-fulfilled:focus{opacity:1;width:64px}.mwi-mm-cart-row.is-monitoring{border-color:rgba(96,165,250,.25)}.mwi-mm-cart-row.is-refilled{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.04);animation:mwi-mm-refill-pulse .6s ease}@keyframes mwi-mm-refill-pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.3)}50%{box-shadow:0 0 0 4px rgba(245,158,11,.1)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}.mwi-mm-refill-tag{font-size:11px;color:#fbbf24;font-weight:500;margin-left:4px}.mwi-mm-threshold-line{font-size:10.5px;color:#6b7a90;display:flex;align-items:center;gap:4px;margin-top:1px;cursor:pointer;transition:color .2s}.mwi-mm-threshold-line:hover{color:#9aa3b5}.mwi-mm-th-icon{width:12px;height:12px;fill:none;stroke:#60a5fa;stroke-width:2;flex-shrink:0}.mwi-mm-th-val{color:#7cacf8;font-weight:600}.mwi-mm-th-stock{color:#6b7a90}.mwi-mm-th-ok{color:#34d399}.mwi-mm-th-low{color:#fbbf24}.mwi-mm-set-threshold-btn{border:none;background:none;color:#4a7adb;font-size:10.5px;cursor:pointer;padding:0;font-family:inherit;transition:color .2s;text-align:left}.mwi-mm-set-threshold-btn:hover{color:#7cacf8}.mwi-mm-th-modal{position:fixed;inset:0;z-index:2147483500;display:flex;align-items:center;justify-content:center}.mwi-mm-th-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.mwi-mm-th-modal-content{position:relative;width:300px;max-width:calc(100vw - 32px);background:#1b1d24;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}.mwi-mm-th-modal-head{padding:14px 16px 10px;border-bottom:1px solid #2e323d}.mwi-mm-th-modal-head .title{font-size:15px;font-weight:600;color:#fff}.mwi-mm-th-modal-head .subtitle{font-size:11px;color:#6b7280;margin-top:2px}.mwi-mm-th-modal-body{padding:14px 16px}.mwi-mm-th-modal-desc{font-size:11.5px;color:#6b7a90;line-height:1.5;margin-bottom:12px}.mwi-mm-th-modal-field{display:flex;align-items:center;gap:8px;margin-bottom:8px}.mwi-mm-th-modal-field label{font-size:13px;color:#c7cfdd;white-space:nowrap;font-weight:500}.mwi-mm-th-modal-input{flex:1;max-width:120px;padding:6px 8px;border:1px solid rgba(255,255,255,.15);border-radius:6px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:14px;font-weight:600;font-family:inherit;outline:none;text-align:center}.mwi-mm-th-modal-input:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-th-modal-unit{font-size:12px;color:#6b7a90}.mwi-mm-th-modal-preview{font-size:11px;color:#555a72;min-height:16px;line-height:1.5}.mwi-mm-th-modal-foot{padding:10px 14px;border-top:1px solid #2e323d;display:flex;justify-content:flex-end;gap:6px}.mwi-mm-th-modal-foot button{padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;font-family:inherit;white-space:nowrap;transition:all .2s}.mwi-mm-th-modal-foot button:hover{background:rgba(148,163,184,.2);color:#edf2ff}.mwi-mm-th-modal-foot button.primary{border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.15);color:#93c5fd}.mwi-mm-th-modal-foot button.primary:hover{background:rgba(96,165,250,.25)}.mwi-mm-th-modal-clear{margin-right:auto!important;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-th-modal-clear:hover{background:rgba(239,68,68,.15)!important}.mwi-mm-clear-group{position:relative;display:inline-flex}.mwi-mm-clear-main{border-radius:6px 0 0 6px!important;border-right:none!important;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-clear-dd-toggle{border-radius:0 6px 6px 0!important;padding:3px 3px!important;min-width:18px;display:flex!important;align-items:center;justify-content:center;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-clear-main:hover,.mwi-mm-clear-dd-toggle:hover{background:rgba(239,68,68,.15)!important}.mwi-mm-clear-dropdown{position:absolute;top:calc(100% + 4px);right:0;background:#262a36;border:1px solid #3a3e4c;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);z-index:99;min-width:160px;padding:4px}.mwi-mm-clear-dropdown button{display:block;width:100%;text-align:left;border:none!important;background:none!important;color:#c7cfdd!important;font-size:12px;padding:7px 10px;border-radius:5px;cursor:pointer;transition:background .15s}.mwi-mm-clear-dropdown button:hover{background:rgba(255,255,255,.06)!important}.mwi-mm-clear-dropdown .dd-label{color:#e2e8f0;font-weight:500;font-size:12px}.mwi-mm-clear-dropdown .dd-desc{color:#6b7a90;font-size:11px;margin-top:2px}.mwi-mm-clear-dropdown .dd-danger .dd-label{color:#f87171!important}.mwi-mm-clear-dropdown .dd-divider{height:1px;background:#2e323d;margin:4px 6px}
+        style.textContent = `[data-mm-badge]::after{content:attr(data-mm-badge);margin-left:6px;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;display:inline-block;line-height:1.5;vertical-align:middle}[data-mm-badge-type="missing"]::after{color:#e88e98;background:rgba(180,50,70,.18)}[data-mm-badge-type="ok"]::after{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15)}[data-mm-badge-type="surplus"]::after{color:rgba(147,197,253,.75);background:rgba(59,130,246,.12)}.mwi-mm-upgrade-badge{margin-left:8px;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;display:inline-block;line-height:1.5}.mwi-mm-upgrade-badge.is-missing{color:#e88e98;background:rgba(180,50,70,.18)}.mwi-mm-upgrade-badge.is-ok{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15)}.mwi-mm-upgrade-inline{margin-top:4px;display:inline-block;font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;line-height:1.5}.mwi-mm-upgrade-inline.is-missing{color:#e88e98;background:rgba(180,50,70,.18);border:none}.mwi-mm-upgrade-inline.is-ok{color:rgba(110,200,150,.8);background:rgba(40,120,80,.15);border:none}.mwi-mm-upgrade-inline.is-surplus{color:rgba(147,197,253,.75);background:rgba(59,130,246,.12);border:none}.mwi-mm-summary-panel{margin:6px 0 2px;padding:10px 2px 0;border-radius:0;background:transparent!important;border:none!important;border-top:1px solid rgba(255,255,255,.06)!important;color:inherit!important;font-size:13px;box-shadow:none}.mwi-mm-summary-head{display:flex;justify-content:center;align-items:center;margin-bottom:6px}.mwi-mm-summary-head .stat{color:rgba(255,255,255,.55)!important;font-size:12px;font-weight:500}.mwi-mm-manual-count-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 4px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:6px}.mwi-mm-manual-label{color:rgba(255,255,255,.7)!important;font-size:12px;font-weight:500;white-space:nowrap;flex-shrink:0}.mwi-mm-manual-input{width:90px;padding:3px 6px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:13px;font-weight:600;outline:none;transition:border-color .2s;-moz-appearance:textfield}.mwi-mm-manual-input::-webkit-inner-spin-button,.mwi-mm-manual-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.mwi-mm-manual-input:focus{border-color:rgba(99,140,255,.6)}.mwi-mm-summary-buttons{margin-top:4px;display:flex;gap:8px}.mwi-mm-summary-buttons button{flex:1;cursor:pointer}#mwi-mm-cart-tab{position:fixed;left:calc(100vw - 70px);top:42vh;z-index:2147482200;width:52px;height:52px;border:1px solid #3a3a45;background:rgba(30,30,36,.96);color:#c8cfde;border-radius:14px;padding:0;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none;cursor:pointer;isolation:isolate;box-shadow:0 8px 22px rgba(0,0,0,.45);transition:border-color .2s,color .2s,box-shadow .2s,background-color .2s}#mwi-mm-cart-tab::after{content:"";position:absolute;inset:0;border-radius:14px;background:transparent;box-shadow:0 0 12px 2px #fff;z-index:-1;opacity:.1;pointer-events:none;animation:mwi-mm-fab-breathe 6.2s ease-in-out infinite}#mwi-mm-cart-tab.is-open{border-color:#5b8cff;color:#f0f5ff;background:rgba(34,40,54,.98)}#mwi-mm-cart-tab.is-open::after{opacity:.16}@keyframes mwi-mm-fab-breathe{0%{transform:scale(1);opacity:.05}50%{transform:scale(1.02);opacity:.12}100%{transform:scale(1);opacity:.05}}#mwi-mm-cart-tab:active{cursor:grabbing}#mwi-mm-cart-tab .mwi-mm-fab-icon{width:24px;height:24px;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;fill:none}#mwi-mm-cart-tab .mwi-mm-fab-badge{position:absolute;right:-6px;top:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;border:1px solid rgba(0,0,0,.45);font-size:10px;font-weight:700;line-height:1;display:none;align-items:center;justify-content:center}#mwi-mm-cart-drawer{position:fixed;left:calc(100vw - 406px);top:8%;width:390px;max-width:calc(100vw - 20px);max-height:84vh;z-index:2147482201;background:#1b1d24;color:#e4e6ee;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 18px 36px rgba(0,0,0,.56);overflow:hidden;display:none;flex-direction:column;font-family:"Microsoft YaHei","PingFang SC",sans-serif}#mwi-mm-cart-drawer.is-resizing{user-select:none;transition:none!important}.mwi-mm-cart-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid #2e323d;background:#20232d;user-select:none;cursor:grab;touch-action:none;flex-shrink:0;position:relative}.mwi-mm-cart-head:active{cursor:grabbing}.mwi-mm-close-btn{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:6px;padding:3px 5px;flex-shrink:0;white-space:nowrap;font-size:11px;transition:color .2s,background-color .2s,border-color .2s}.mwi-mm-close-btn:hover{color:#edf2ff;background:rgba(148,163,184,.18);border-color:#555a72}.mwi-mm-cart-head .title{font-size:14px;font-weight:600;letter-spacing:.5px;color:#fff;white-space:nowrap}.mwi-mm-cart-head .ops{display:flex;flex-wrap:wrap;gap:4px}.mwi-mm-cart-head .ops button{border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;white-space:nowrap;transition:color .2s,border-color .2s,background-color .2s}.mwi-mm-cart-head .ops button:hover{background:rgba(148,163,184,.18);color:#edf2ff}.mwi-mm-cart-head .ops button[data-act="toggle-settings"].is-on{border-color:rgba(91,140,255,.5);background:rgba(91,140,255,.18);color:#b9ccff}.mwi-mm-settings-panel{padding:0;background:rgba(255,255,255,.015);min-height:0;flex:1;overflow:hidden;display:none;flex-direction:column}.mwi-mm-settings-scroll{flex:1;min-height:0;overflow-y:auto;padding:8px 10px}.mwi-mm-settings-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.04)}.mwi-mm-settings-row:last-child{border-bottom:none}.mwi-mm-settings-info{flex:1;min-width:0}.mwi-mm-settings-label{font-size:12.5px;font-weight:600;color:#e4e6ee;line-height:1.4}.mwi-mm-settings-desc{font-size:10.5px;color:#6b7280;line-height:1.45;margin-top:1px}.mwi-mm-toggle-btn{flex-shrink:0;min-width:36px;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid;transition:all .2s;text-align:center}.mwi-mm-toggle-btn.is-on{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.18);color:#86efac}.mwi-mm-toggle-btn.is-off{border-color:rgba(120,129,145,.45);background:rgba(120,129,145,.1);color:#8b90a8}.mwi-mm-toggle-btn:hover{filter:brightness(1.15)}.mwi-mm-select{flex-shrink:0;min-width:80px;padding:3px 6px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(120,129,145,.45);background:rgba(120,129,145,.1);color:#c8cfde;outline:none;transition:all .2s;font-family:inherit}.mwi-mm-select:hover{border-color:rgba(91,140,255,.4);background:rgba(91,140,255,.08)}.mwi-mm-select:focus{border-color:rgba(91,140,255,.6)}.mwi-mm-select option{background:#1b1d24;color:#e4e6ee}.mwi-mm-chain-btn{position:absolute;right:-2px;top:-2px;width:16px;height:16px;border:1px solid rgba(99,140,255,.4);background:rgba(99,140,255,.12);color:#93c5fd;border-radius:3px;font-size:8px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:5;transition:all .15s}.mwi-mm-chain-btn:hover{background:rgba(99,140,255,.25);border-color:rgba(99,140,255,.6);color:#fff}.mwi-mm-chain-tree{margin:6px 0;padding:4px 0;border-top:1px dashed rgba(255,255,255,.06);border-bottom:1px dashed rgba(255,255,255,.06);font-size:12.5px;max-height:280px;overflow-y:auto;text-align:left}.mwi-mm-chain-title{font-size:12.5px;font-weight:600;color:#93c5fd;padding:2px 4px 4px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#1b1d24;z-index:1}.mwi-mm-chain-toggle{border:1px solid rgba(99,140,255,.3);background:rgba(99,140,255,.1);color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;transition:all .15s;line-height:1.4}.mwi-mm-chain-toggle:hover{background:rgba(99,140,255,.22);border-color:rgba(99,140,255,.5)}.mwi-mm-chain-body{width:100%;border-collapse:collapse;font-size:12.5px}.mwi-mm-chain-step-head td{padding:5px 4px 2px;font-weight:600;color:#c8cfde;font-size:12.5px}.mwi-mm-chain-row td{padding:2px 4px}.mwi-mm-chain-row td.mwi-mm-chain-name{padding-left:18px;color:#e4e6ee}.mwi-mm-chain-row td.mwi-mm-chain-qty{color:#f8c86b;font-weight:600;text-align:right;white-space:nowrap;width:50px;font-variant-numeric:tabular-nums}.mwi-mm-chain-row td.mwi-mm-chain-stock{text-align:right;white-space:nowrap;width:52px;font-size:11px;font-variant-numeric:tabular-nums}.mwi-mm-chain-row.is-missing td.mwi-mm-chain-stock{color:#e88e98}.mwi-mm-chain-row.is-ok td.mwi-mm-chain-stock{color:rgba(110,200,150,.7)}.mwi-mm-chain-row.is-surplus td.mwi-mm-chain-stock{color:rgba(147,197,253,.7)}.mwi-mm-chain-upgrade{font-size:10px;color:#fbbf24;background:rgba(251,191,36,.12);padding:1px 4px;border-radius:2px;margin-left:4px}.mwi-mm-chain-craftable{color:#60a5fa;font-size:9px;margin-left:1px}.mwi-mm-quest-panel{padding:0 8px;border-bottom:1px solid #2e323d;max-height:200px;overflow-y:auto}.mwi-mm-quest-title{font-size:12px;font-weight:600;color:#93c5fd;padding:6px 0 4px;display:flex;align-items:center;gap:4px}.mwi-mm-quest-empty{color:#6b7280;text-align:center;padding:8px;font-size:11px}.mwi-mm-quest-row{padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:3px}.mwi-mm-quest-row:last-child{border-bottom:none}.mwi-mm-quest-info{display:flex;justify-content:space-between;align-items:center}.mwi-mm-quest-name{font-size:12px;color:#e4e6ee;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-mm-quest-progress{font-size:11px;color:#f8c86b;font-weight:600;flex-shrink:0;margin-left:6px}.mwi-mm-quest-bar{height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}.mwi-mm-quest-bar-fill{height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:2px;transition:width .3s}.mwi-mm-quest-ops{display:flex;gap:4px}.mwi-mm-quest-ops button{flex:1;padding:2px 4px;border:1px solid #3a3a45;background:rgba(148,163,184,.08);color:#a7adbc;border-radius:4px;font-size:10px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}.mwi-mm-quest-ops button:hover{background:rgba(148,163,184,.18);color:#edf2ff;border-color:#555a72}.quest-toggle-btn{border:1px solid #3a3a45!important;background:rgba(148,163,184,.1)!important;color:#a7adbc!important;border-radius:6px!important;padding:3px 5px!important;cursor:pointer!important;display:flex!important;align-items:center;justify-content:center;transition:all .2s!important}.quest-toggle-btn:hover{background:rgba(148,163,184,.18)!important;color:#edf2ff!important}.quest-toggle-btn.is-on{border-color:rgba(91,140,255,.5)!important;background:rgba(91,140,255,.18)!important;color:#b9ccff!important}.mwi-mm-cart-search-row{padding:6px 8px;border-bottom:1px solid #2e323d;flex-shrink:0}.mwi-mm-cart-search{width:100%;padding:5px 10px;border:1px solid #2e324a;border-radius:6px;background:#0d0f17;color:#c0c8d8;font-size:12px;font-family:inherit;outline:none;transition:border-color .2s}.mwi-mm-cart-search::placeholder{color:#555a72}.mwi-mm-cart-search:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-cart-list{padding:6px 8px;flex:1;min-height:0;max-height:${CART_LIST_MAX_HEIGHT_DEFAULT}px;overflow:auto}#mwi-mm-cart-drawer.has-custom-size .mwi-mm-cart-list{max-height:none}.mwi-mm-cart-empty{color:#6b7280;text-align:center;padding:18px 6px;border:1px dashed #3a3a45;border-radius:8px;font-size:12px}.mwi-mm-cart-row{border:1px solid #2f323d;background:transparent;border-radius:8px;padding:6px 8px;margin-bottom:4px;display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:6px;transition:background-color .2s,border-color .2s}.mwi-mm-cart-row:hover{background-color:rgba(255,255,255,.02)}.mwi-mm-cart-row.is-target{border:2px solid #6f778c;box-shadow:0 0 0 1px rgba(111,119,140,.28);background:transparent}.mwi-mm-cart-row .icon-btn{width:40px;height:40px;border-radius:6px;border:1px solid #3a3a45;background:#2c2c35;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:border-color .2s,color .2s}.mwi-mm-cart-row .icon-btn:hover{border-color:#6b8cff}.mwi-mm-item-icon{width:28px;height:28px}.mwi-mm-icon-fallback{color:#8b8b9e;font-weight:700;font-size:13px}.mwi-mm-cart-row .meta{min-width:0;display:flex;flex-direction:column;gap:2px}.mwi-mm-cart-row .meta .name{color:#fff;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;min-width:0}.mwi-mm-cart-row .meta .name-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mwi-mm-star-btn{flex-shrink:0;width:18px;height:18px;border:none;background:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:transform .15s}.mwi-mm-star-btn svg{fill:#3a3d4a;stroke:#555a72;stroke-width:1.5;transition:fill .2s,stroke .2s}.mwi-mm-star-btn:hover svg{fill:rgba(250,204,21,.25);stroke:#facc15}.mwi-mm-star-btn.is-starred svg{fill:#facc15;stroke:#facc15}.mwi-mm-star-btn:active{transform:scale(1.2)}.mwi-mm-cart-row .meta .qty{color:#9aa3b5;font-size:11px;line-height:1.35;letter-spacing:.1px;display:flex;align-items:center;gap:4px}.mwi-mm-qty-input{width:64px;padding:1px 4px;border:1px solid rgba(255,255,255,.12);border-radius:3px;background:rgba(0,0,0,.2);color:#f8c86b;font-weight:700;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s,background-color .2s;-moz-appearance:textfield}.mwi-mm-qty-input::-webkit-inner-spin-button,.mwi-mm-qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.mwi-mm-qty-input:hover{border-color:rgba(255,255,255,.22)}.mwi-mm-qty-input:focus{border-color:rgba(91,140,255,.5);background:rgba(0,0,0,.35)}.mwi-mm-cart-row .ops{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:68px}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button{border-radius:5px;padding:3px 6px;font-size:11px;border:1px solid #3a3a45!important;background:#232834!important;color:#c7cfdd!important;cursor:pointer;transition:all .2s;min-width:0;font-weight:500}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.market-btn{border:1px solid #1e5a32!important;background:#143220!important;color:#a5d6a7!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.market-btn:hover{background:#1b452b!important;color:#fff!important;border-color:#277841!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.remove-btn{border:1px solid #6e2a30!important;background:#3b1b1e!important;color:#e59b9b!important}#mwi-mm-cart-drawer .mwi-mm-cart-row .ops button.remove-btn:hover{background:#502125!important;color:#fff!important;border-color:#933840!important}.mwi-mm-market-target{outline:2px solid rgba(245,158,11,.9);outline-offset:1px;box-shadow:0 0 0 2px rgba(245,158,11,.28);border-radius:8px;animation:mwi-mm-pulse 1.4s ease-in-out infinite}@keyframes mwi-mm-pulse{0%{box-shadow:0 0 0 1px rgba(245,158,11,.15)}50%{box-shadow:0 0 0 3px rgba(245,158,11,.45)}100%{box-shadow:0 0 0 1px rgba(245,158,11,.15)}}.mwi-mm-toast{position:fixed;top:12px;right:12px;z-index:2147483300;padding:7px 10px;border-radius:8px;border:1px solid rgba(71,85,105,.8);color:#e2e8f0;background:rgba(15,23,42,.95);font-size:12px;transition:all .25s;box-shadow:0 10px 20px rgba(0,0,0,.35)}.mwi-mm-toast-success{border-color:rgba(16,185,129,.85);color:#d1fae5}.mwi-mm-toast-error{border-color:rgba(239,68,68,.85);color:#fecaca}.mwi-mm-resize-handle{position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;touch-action:none;user-select:none;z-index:10;border-radius:0 0 12px 0}.mwi-mm-resize-handle::before{content:"";position:absolute;right:4px;bottom:4px;width:10px;height:10px;border-right:2px solid rgba(255,255,255,.18);border-bottom:2px solid rgba(255,255,255,.18);border-radius:0 0 2px 0;transition:border-color .2s}.mwi-mm-resize-handle:hover::before{border-right-color:rgba(255,255,255,.45);border-bottom-color:rgba(255,255,255,.45)}.mwi-mm-resize-handle:active::before{border-right-color:#5b8cff;border-bottom-color:#5b8cff}.mwi-mm-cart-head .ops button.pick-inv-btn{border-color:#2d6a4f;background:rgba(45,106,79,.18);color:#95d5b2}.mwi-mm-cart-head .ops button.pick-inv-btn:hover{background:rgba(45,106,79,.32);color:#fff}.mwi-mm-cart-head .ops button.pick-inv-btn.is-picking{border-color:#f59e0b;background:rgba(245,158,11,.22);color:#fcd34d;animation:mwi-mm-pick-pulse 1.2s ease-in-out infinite}@keyframes mwi-mm-pick-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}50%{box-shadow:0 0 0 3px rgba(245,158,11,.25)}}.mwi-mm-pick-mode [class*="Inventory_inventory"] [class*="Item_itemContainer"]{cursor:crosshair!important}.mwi-mm-pick-selected{outline:2px solid rgba(34,197,94,.9)!important;outline-offset:-1px;box-shadow:0 0 0 3px rgba(34,197,94,.25)!important;border-radius:6px;position:relative}.mwi-mm-pick-selected::after{content:"✓";position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#22c55e;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:10;pointer-events:none}.mwi-mm-pick-status-bar{position:fixed;bottom:0;left:0;right:0;z-index:2147483400;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 20px;background:rgba(15,23,42,.95);border-top:1px solid rgba(245,158,11,.5);backdrop-filter:blur(8px);font-size:13px;color:#e2e8f0}.mwi-mm-pick-status-text strong{color:#fcd34d;font-size:15px}.mwi-mm-pick-cancel-btn{padding:4px 14px;border:1px solid #6e2a30;background:#3b1b1e;color:#e59b9b;border-radius:6px;font-size:12px;cursor:pointer}.mwi-mm-pick-cancel-btn:hover{background:#502125;color:#fff}.mwi-mm-pick-modal{position:fixed;inset:0;z-index:2147483500;display:flex;align-items:center;justify-content:center}.mwi-mm-pick-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.mwi-mm-pick-modal-content{position:relative;width:340px;max-width:calc(100vw - 32px);max-height:80vh;background:#1b1d24;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}.mwi-mm-pick-modal-head{padding:14px 16px 10px;border-bottom:1px solid #2e323d}.mwi-mm-pick-modal-head .title{font-size:15px;font-weight:600;color:#fff}.mwi-mm-pick-modal-head .subtitle{font-size:11px;color:#6b7280;margin-top:2px}.mwi-mm-pick-modal-list{flex:1;min-height:0;overflow-y:auto;padding:8px 12px}.mwi-mm-pick-row{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.04)}.mwi-mm-pick-row:last-child{border-bottom:none}.mwi-mm-pick-row-icon{width:28px;height:28px;flex-shrink:0}.mwi-mm-pick-row-icon .mwi-mm-item-icon{width:28px;height:28px}.mwi-mm-pick-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e4e6ee;font-size:13px}.mwi-mm-pick-qty{width:52px;padding:3px 6px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:13px;font-weight:600;text-align:center;outline:none;flex-shrink:0}.mwi-mm-pick-qty:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-pick-remove{width:22px;height:22px;border:none;background:rgba(239,68,68,.15);color:#f87171;border-radius:4px;font-size:12px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}.mwi-mm-pick-remove:hover{background:rgba(239,68,68,.35);color:#fff}.mwi-mm-pick-modal-foot{padding:10px 14px;border-top:1px solid #2e323d;display:flex;justify-content:flex-end;gap:6px}.mwi-mm-pick-modal-foot button{flex:1;padding:7px 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid;white-space:nowrap}.mwi-mm-pick-confirm-btn{border-color:#22c55e!important;background:rgba(34,197,94,.18)!important;color:#86efac!important}.mwi-mm-pick-confirm-btn:hover{background:rgba(34,197,94,.32)!important;color:#fff!important}.mwi-mm-pick-back-btn{border-color:#3a3a45!important;background:rgba(148,163,184,.1)!important;color:#a7adbc!important}.mwi-mm-pick-back-btn:hover{background:rgba(148,163,184,.18)!important;color:#edf2ff!important}.mwi-mm-cart-row.is-fulfilled{opacity:.45;border-color:#1e3a2a;background:rgba(52,211,153,.03)}.mwi-mm-fulfilled-tag{font-size:11px;color:#34d399;font-weight:500}.mwi-mm-qty-input.mwi-mm-qty-fulfilled{width:40px;opacity:.4;font-size:12px}.mwi-mm-qty-input.mwi-mm-qty-fulfilled:focus{opacity:1;width:64px}.mwi-mm-cart-row.is-monitoring{border-color:rgba(96,165,250,.25)}.mwi-mm-cart-row.is-refilled{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.04);animation:mwi-mm-refill-pulse .6s ease}@keyframes mwi-mm-refill-pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.3)}50%{box-shadow:0 0 0 4px rgba(245,158,11,.1)}100%{box-shadow:0 0 0 0 rgba(245,158,11,0)}}.mwi-mm-refill-tag{font-size:11px;color:#fbbf24;font-weight:500;margin-left:4px}.mwi-mm-threshold-line{font-size:10.5px;color:#6b7a90;display:flex;align-items:center;gap:4px;margin-top:1px;cursor:pointer;transition:color .2s}.mwi-mm-threshold-line:hover{color:#9aa3b5}.mwi-mm-th-icon{width:12px;height:12px;fill:none;stroke:#60a5fa;stroke-width:2;flex-shrink:0}.mwi-mm-th-val{color:#7cacf8;font-weight:600}.mwi-mm-th-stock{color:#6b7a90}.mwi-mm-th-ok{color:#34d399}.mwi-mm-th-low{color:#fbbf24}.mwi-mm-set-threshold-btn{border:none;background:none;color:#4a7adb;font-size:10.5px;cursor:pointer;padding:0;font-family:inherit;transition:color .2s;text-align:left}.mwi-mm-set-threshold-btn:hover{color:#7cacf8}.mwi-mm-th-modal{position:fixed;inset:0;z-index:2147483500;display:flex;align-items:center;justify-content:center}.mwi-mm-th-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}.mwi-mm-th-modal-content{position:relative;width:300px;max-width:calc(100vw - 32px);background:#1b1d24;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}.mwi-mm-th-modal-head{padding:14px 16px 10px;border-bottom:1px solid #2e323d}.mwi-mm-th-modal-head .title{font-size:15px;font-weight:600;color:#fff}.mwi-mm-th-modal-head .subtitle{font-size:11px;color:#6b7280;margin-top:2px}.mwi-mm-th-modal-body{padding:14px 16px}.mwi-mm-th-modal-desc{font-size:11.5px;color:#6b7a90;line-height:1.5;margin-bottom:12px}.mwi-mm-th-modal-field{display:flex;align-items:center;gap:8px;margin-bottom:8px}.mwi-mm-th-modal-field label{font-size:13px;color:#c7cfdd;white-space:nowrap;font-weight:500}.mwi-mm-th-modal-input{flex:1;max-width:120px;padding:6px 8px;border:1px solid rgba(255,255,255,.15);border-radius:6px;background:rgba(0,0,0,.3);color:#f8c86b;font-size:14px;font-weight:600;font-family:inherit;outline:none;text-align:center}.mwi-mm-th-modal-input:focus{border-color:rgba(91,140,255,.5)}.mwi-mm-th-modal-unit{font-size:12px;color:#6b7a90}.mwi-mm-th-modal-preview{font-size:11px;color:#555a72;min-height:16px;line-height:1.5}.mwi-mm-th-modal-foot{padding:10px 14px;border-top:1px solid #2e323d;display:flex;justify-content:flex-end;gap:6px}.mwi-mm-th-modal-foot button{padding:7px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #3a3a45;background:rgba(148,163,184,.1);color:#a7adbc;font-family:inherit;white-space:nowrap;transition:all .2s}.mwi-mm-th-modal-foot button:hover{background:rgba(148,163,184,.2);color:#edf2ff}.mwi-mm-th-modal-foot button.primary{border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.15);color:#93c5fd}.mwi-mm-th-modal-foot button.primary:hover{background:rgba(96,165,250,.25)}.mwi-mm-th-modal-clear{margin-right:auto!important;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-th-modal-clear:hover{background:rgba(239,68,68,.15)!important}.mwi-mm-clear-group{position:relative;display:inline-flex}.mwi-mm-clear-main{border-radius:6px 0 0 6px!important;border-right:none!important;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-clear-dd-toggle{border-radius:0 6px 6px 0!important;padding:3px 3px!important;min-width:18px;display:flex!important;align-items:center;justify-content:center;border-color:#8f3a44!important;color:#f3a3ad!important}.mwi-mm-clear-main:hover,.mwi-mm-clear-dd-toggle:hover{background:rgba(239,68,68,.15)!important}.mwi-mm-clear-dropdown{position:absolute;top:calc(100% + 4px);right:0;background:#262a36;border:1px solid #3a3e4c;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);z-index:99;min-width:160px;padding:4px}.mwi-mm-clear-dropdown button{display:block;width:100%;text-align:left;border:none!important;background:none!important;color:#c7cfdd!important;font-size:12px;padding:7px 10px;border-radius:5px;cursor:pointer;transition:background .15s}.mwi-mm-clear-dropdown button:hover{background:rgba(255,255,255,.06)!important}.mwi-mm-clear-dropdown .dd-label{color:#e2e8f0;font-weight:500;font-size:12px}.mwi-mm-clear-dropdown .dd-desc{color:#6b7a90;font-size:11px;margin-top:2px}.mwi-mm-clear-dropdown .dd-danger .dd-label{color:#f87171!important}.mwi-mm-clear-dropdown .dd-divider{height:1px;background:#2e323d;margin:4px 6px}
 .mwi-mm-prefill-hint{display:flex;align-items:center;gap:5px;padding:2px 0;margin-bottom:2px;font-size:12px;color:#8a9aaa;line-height:1.4}.mwi-mm-prefill-hint b{color:#f8c86b;font-weight:600}.mwi-mm-prefill-tag{flex-shrink:0;padding:0px 5px;border-radius:3px;background:rgba(52,211,153,.15);color:#34d399;font-size:10px;font-weight:600}
 .mwi-mm-purchase-nav{position:fixed;z-index:802;border-top:1px solid rgba(255,255,255,.1);background:rgba(18,20,28,.97);padding:6px 14px;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .mwi-mm-nav-items{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.12) transparent}.mwi-mm-nav-items::-webkit-scrollbar{height:4px}.mwi-mm-nav-items::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}.mwi-mm-nav-item{flex-shrink:0;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);cursor:pointer;transition:all .2s}.mwi-mm-nav-item:hover{border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.04)}.mwi-mm-nav-item.is-current{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.08);box-shadow:0 0 0 1px rgba(245,158,11,.15)}.mwi-mm-nav-item-icon{width:24px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.mwi-mm-nav-item-icon svg{width:24px;height:24px}.mwi-mm-nav-item-info{min-width:0}.mwi-mm-nav-item-name{font-size:11px;font-weight:500;color:#e0e4f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px}.mwi-mm-nav-item-qty{font-size:9px;color:#f8c86b;font-weight:600}.mwi-mm-nav-item.is-current .mwi-mm-nav-item-name{color:#fff}.mwi-mm-nav-item.is-current .mwi-mm-nav-item-qty{color:#fcd34d}
@@ -5487,7 +5592,7 @@
     async function init() {
         await waitForBody();
 
-        setupWSInterceptor();
+        // v1.4.5: setupWSInterceptor() 已提前到 IIFE 顶层执行，此处不再调用
 
         _wsInventory.onChange(() => {
             triggerInventorySync(15);
@@ -5529,7 +5634,7 @@
         const dlLabel = _dataLayer.ready ? t("dl_ok") : t("dl_fallback");
         const srcLabel = _capturedClientData ? (_capturedClientData._src || t("cache")) : t("dl_fallback");
         const plansLabel = STATE.craftingPlans.size > 0 ? t("plans_n", STATE.craftingPlans.size) : t("no_plans");
-        setAction(t("action_startup", "1.4.1", wsLabel, dlLabel, plansLabel, srcLabel));
+        setAction(t("action_startup", "1.4.6", wsLabel, dlLabel, plansLabel, srcLabel));
         scheduleRefresh(80);
     }
 
