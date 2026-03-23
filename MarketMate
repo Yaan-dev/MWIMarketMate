@@ -3,7 +3,7 @@
 // @name:en      MWI Market Mate
 // @name:zh-CN   MWI 市场伴侣
 // @namespace    https://milkywayidle.com/
-// @version      1.4.6
+// @version      1.4.7
 // @description  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
 // @description:en  Crafting/housing material auto-calc, shortage display, shopping list, market highlight. WS inventory + data layer. Bilingual (EN/ZH).
 // @description:zh-CN  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
@@ -26,7 +26,7 @@
     /** 脚本元信息及 localStorage 键名 */
     const SCRIPT = {
         id: "mwi-missing-cart-cn",
-        version: "1.4.6",
+        version: "1.4.7",
         cartKey: "mwi_missing_cart_v1",         // 购物车持久化
         plansKey: "mwi_crafting_plans_v1",      // 制作计划持久化
         fabPosKey: "mwi_missing_cart_fab_pos_v1",    // FAB 悬浮按钮位置
@@ -1258,7 +1258,7 @@
             return rows;
         },
 
-        /** 叶子材料转购物车条目（扣除库存） */
+        /** 叶子材料转购物车条目（扣除库存 + 购物车已有量） */
         toCartItems(leafMap, recipeHrid) {
             const items = [];
             for (const [hrid, qty] of leafMap) {
@@ -1267,8 +1267,12 @@
                 const name = _dataLayer.hridToName(hrid) || bareId;
                 const stock = getEffectiveInventory(bareId, recipeHrid);
                 const missing = Math.max(0, qty - stock);
-                if (missing > 0) {
-                    items.push({ itemId: bareId, name, iconRef: hrid, missing, totalNeeded: qty });
+                // ★ v1.4.7: 扣除购物车中已有的数量（已规划购买量），只添加净增量
+                const cartRow = STATE.cart.get(bareId);
+                const alreadyInCart = cartRow ? Math.max(0, cartRow.quantity) : 0;
+                const netMissing = Math.max(0, missing - alreadyInCart);
+                if (netMissing > 0) {
+                    items.push({ itemId: bareId, name, iconRef: hrid, missing: netMissing, totalNeeded: qty });
                 }
             }
             return items;
@@ -1381,7 +1385,7 @@
             }
         });
 
-        console.log("[mwi-mm] v1.4.6 WebSocket interceptor registered (lang=" + _currentLang + ")");
+        console.log("[mwi-mm] v1.4.7 WebSocket interceptor registered (lang=" + _currentLang + ")");
     }
 
     // ★ v1.4.5: 尽早安装 WS 拦截器（不依赖 DOM，避免 document-idle 时错过 init_character_data）
@@ -3094,8 +3098,12 @@
             for (const mat of step.materials) {
                 const bareId = mat.hrid.replace(/^\/items\//, "");
                 const stock = getEffectiveInventory(bareId, chainExcludeSet);
-                const missing = Math.max(0, mat.qty - stock);
-                const surplus = missing === 0 ? stock - mat.qty : 0;
+                // ★ v1.4.7: 扣除购物车已有量，展示真实可用库存
+                const cartRow = STATE.cart.get(bareId);
+                const cartReserved = cartRow ? Math.max(0, cartRow.quantity) : 0;
+                const availableStock = Math.max(0, stock - cartReserved);
+                const missing = Math.max(0, mat.qty - availableStock);
+                const surplus = missing === 0 ? availableStock - mat.qty : 0;
                 const cls = missing > 0 ? "is-missing" : (surplus > 0 ? "is-surplus" : "is-ok");
                 const statusText = missing > 0 ? t("shortage_n", formatQty(missing)) : t("surplus_n", formatQty(surplus));
                 html += `<tr class="mwi-mm-chain-row ${cls}"><td class="mwi-mm-chain-name">${escapeHtml(mat.name)}</td>` +
@@ -5634,7 +5642,7 @@
         const dlLabel = _dataLayer.ready ? t("dl_ok") : t("dl_fallback");
         const srcLabel = _capturedClientData ? (_capturedClientData._src || t("cache")) : t("dl_fallback");
         const plansLabel = STATE.craftingPlans.size > 0 ? t("plans_n", STATE.craftingPlans.size) : t("no_plans");
-        setAction(t("action_startup", "1.4.6", wsLabel, dlLabel, plansLabel, srcLabel));
+        setAction(t("action_startup", "1.4.7", wsLabel, dlLabel, plansLabel, srcLabel));
         scheduleRefresh(80);
     }
 
