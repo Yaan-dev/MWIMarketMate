@@ -1,398 +1,207 @@
-# MWI 市场伴侣 · 功能说明文档
+# MWI Market Mate · Feature Documentation
 
 ---
 
-# 写在前面
+# Before We Begin
 
-> ⚠️ **关于合规性说明**
+> ⚠️ **Compliance Notice**
 
-本插件**不包含任何自动购买功能**，因自动功能会违反游戏规则第4.2条。
+This plugin **does not include any auto-buy functionality**, as automation would violate game rule 4.2.
 
-✅ **本插件**：在客户端直接跳转到市场中某个物品的页面。这与玩家手动 Shift 点击背包中的物品效果完全一致。
+✅ **This plugin**: Navigates to a specific item's market page on the client side. This is identical to a player manually Shift-clicking an item in their inventory.
 
-❌ **违规插件**：提供一键完成多种物品的批量购买。这会批量向服务器发送请求，属于自动化操作。
+❌ **Rule-breaking plugins**: Provide one-click batch purchasing of multiple items, sending bulk requests to the server — that's automation.
 
-因此，**所有的购买行为均需玩家手动操作**
-插件仅负责帮你找到物品、算清数量，剩下的交给你来完成。
+Therefore, **all purchases must be performed manually by the player.**
+The plugin only helps you find items and calculate quantities — the rest is up to you.
 
-如果你不信任一键跳转市场的功能，插件亦提供了购物车内物品在市场内高亮的功能。
+If you don't trust the one-click market navigation feature, the plugin also provides in-market highlighting of items in your shopping list.
 
-**插件已提交管理员查看，1.4.1起一切功能均确保合规。**
+**The plugin has been submitted to admin for review. All features from v1.4.1 onward are fully compliant.**
 
 ---
 
-# 一、插件简介
+# I. Overview
 
-本插件的核心功能是**制作缺料的计算助手与手动采购辅助工具**。当你打开任意制作弹窗时，它会自动分析当前制作动作所需的材料，精准计算出你还缺少哪些、缺少多少，并可添加至购物车内，帮助你快速跳转到市场对应的物品页面。
+The core purpose of this plugin is to serve as a **crafting material shortage calculator and manual purchasing assistant**. When you open any crafting panel, it automatically analyzes the required materials, precisely calculates what you're missing and how much, and lets you add them to a shopping list for quick market navigation.
 
-**v1.3.0** 起，插件核心数据来源从 DOM 解析迁移至游戏数据层（`initClientData`），配方数据更精确，并自动计算工匠茶等 buff 对材料消耗的影响。
+**v1.3.0**: Core data source migrated from DOM parsing to the game data layer (`initClientData`), providing more accurate recipe data and automatic Artisan Tea buff calculations.
 
-**v1.3.1** 新增市场弹窗自动预填缺料数量和采购导航条，大幅提升连续采购多种材料的效率。
+**v1.3.1**: Added market dialog auto-fill and purchase navigation bar, greatly improving efficiency when buying multiple materials.
 
-**v1.3.5** 新增制作计划与库存锁定机制，解决多配方共用材料时的缺口误算问题。
+**v1.3.5**: Added crafting plans with inventory locking, solving miscalculation issues when multiple recipes share materials.
 
-**v1.4.0** 新增英语界面支持（双语 i18n），可在设置面板中切换插件语言。
+**v1.4.0**: Added English language support (bilingual i18n). Switch plugin language in the settings panel.
 
-**v1.4.1** 移除采购自动跳转功能，改为导航栏内联购齐横幅，所有市场页面跳转均由玩家手动点击触发，确保合规。
+**v1.4.1**: Removed auto-advance after purchase. Replaced with an inline fulfilled banner in the navigation bar — all market page navigation is now triggered by manual player clicks, ensuring compliance.
 
-**v1.4.2** 新增 Z-score 安全边际概率模型、升级链树形展示、任务追踪面板，并移除多余的回退跳转方案，进一步确保合规。
+**v1.4.2**: Added Z-score safety margin probability model, upgrade chain tree display, and quest tracking panel. Removed legacy fallback navigation to further ensure compliance.
 
-**v1.4.3** 新增余量标记与升级链步骤筛选，金币不再参与工匠茶减免计算，设置面板新增功能建议与打赏入口。
+**v1.4.3**: Added surplus markers and upgrade chain step filtering. Gold coins no longer affected by Artisan Tea reductions. New feedback and donate buttons in settings.
 
-**v1.4.5** 修复脚本加载时机导致部分用户库存读取失败的问题，全链材料加入购物车时同步创建制作计划，新增使用说明页面入口，社区反馈支持完成标记。
+**v1.4.5**: Fixed script loading timing that caused inventory data loss for some users. Full chain materials now sync to crafting plans. Added User Guide page and feedback completion marking.
 
-**v1.4.6** 升级链「加入全链材料」现在为每个勾选步骤创建独立制作计划，路过产物的材料也能正确锁定库存，解决多条升级链共享中间材料时缺口误算的问题。
+**v1.4.6**: "Add Full Chain Materials" now creates independent crafting plans per step, so intermediate products' materials are properly locked. Fixes shortage miscalculation when multiple upgrade chains share intermediate materials.
 
-> 📖 完整使用说明请访问：https://mate.colacola.cloud/guide
+**v1.4.7**: Fixed full chain materials not deducting existing cart quantities when adding to shopping list. Upgrade chain tree now correctly subtracts cart-claimed quantities from available inventory.
+
+> 📖 Full User Guide: https://mate.colacola.cloud/guide?lang=en
 >
-> 💬 功能建议与社区反馈：https://mate.colacola.cloud/community
+> 💬 Feedback & Community: https://mate.colacola.cloud/community?lang=en
 
 ---
 
-# 二、功能详解
+# II. Acknowledgments
 
-### 1. 缺少材料自动计算
-
-打开游戏中任意技能的制作/行动详情后，插件会自动读取以下信息：
-
-- 当前设定的**行动次数**
-- 每种材料的**单次需求数量**（自动计算工匠茶减免）
-- 你当前**背包中的库存数量**（通过 WebSocket 精确获取）
-
-根据上述数据，插件会自动计算每种材料的**总需求量**和**缺口数量**（总需 - 库存）。
-
-插件会直接在制作弹窗的材料列表中注入**缺料提示徽章**：
-
-- 材料不足时显示红色「**缺 X**」
-- 材料充足且有余量时显示蓝色「**余 X**」，告诉你做完后还能剩多少（v1.4.3）
-- 材料刚好够用时显示绿色「**缺 0**」
-
-汇总面板会显示数据来源标记（如 `⚡数据层 · 工匠-11.1%`），方便确认茶水减免是否生效。
-
-### 2. 工匠茶 & 暴饮袋子自动计算
-
-插件会自动读取当前技能茶水栏中的工匠茶配置和暴饮袋子的强化等级，计算材料消耗减免。
-
-- **工匠茶**：对生产类技能（酿造/烹饪/锻造/裁缝/制作）减免 10% × 浓缩倍率
-- **暴饮袋子**：根据强化等级计算浓缩倍率加成
-
-### 3. "当前行动"界面支持
-
-在炼金、强化等场景下，玩家通常会停留在"当前行动"标签页挂机。
-该界面没有原生的行动次数输入框，插件会自动识别此状态，并在汇总面板中显示一个 **"计划次数"** 手动输入框。
-
-- 输入你计划制作的次数后，插件会据此自动计算缺料
-- 输入过程中即使游戏进度刷新，输入框也会**保持焦点和光标位置**，不会被打断
-- 计算结果同样支持一键加入购物清单
-
-### 4. 弹窗内汇总面板
-
-在制作弹窗的行动按钮上方，插件会插入一个**汇总面板**，内容包括：
-
-- 当前缺料种类数与总缺少数量
-- 数据来源指示和茶水 buff 百分比
-- 当前配方已有制作计划时显示「已有计划」标签
-- 按钮：**加入购物清单**（同时创建制作计划锁定材料）
-
-### 5. 购物清单（浮动侧边栏）
-
-插件会在页面右侧注入一个**可拖拽的浮动按钮**，点击后展开购物清单抽屉。购物清单的主要特性：
-
-- **持久化存储**：清单数据保存在浏览器 `localStorage` 中，刷新页面或重启游戏后不会丢失
-- **累加逻辑**：同一物品多次加入时，数量会自动叠加而非重复创建条目
-- **收藏保护**：收藏物品库存同步补齐后不会被删除，保留为"✓ 已补齐"状态
-- **常备数量**：收藏物品可设置常备阈值，库存低于该值时自动回填缺料
-- **清空分级**：主按钮仅清非收藏，下拉菜单可清空全部
-- **物品搜索**：支持按名称搜索清单内物品
-- **数量可编辑**：缺料数量支持手动修改
-- **从背包添加**：点选背包中的物品直接添加到清单
-
-### 6. 市场一键跳转
-
-购物清单中每个物品旁边都有一个「**直达市场**」按钮。点击后，插件直接调用游戏 React 组件树中的市场跳转方法，传入物品的 HRID，实现与游戏内原生跳转完全一致的效果。
-
-如果你不想使用跳转功能，也可以自行打开市场页面，购物清单中的物品会在市场界面内被自动高亮标记。
-
-### 7. 市场弹窗预填数量
-
-打开市场购买弹窗时，插件会自动识别当前物品是否在购物清单中，若匹配则将缺料数量**自动填入数量输入框**，并在输入框上方显示预填提示。
-
-- 支持所有购买类弹窗（立即购买、购买挂牌、购买订单）
-- 仅当购物车中有该物品且数量 > 0 时才预填
-- 可在设置面板中开关此功能
-
-### 8. 采购导航条
-
-市场弹窗打开期间，插件会在弹窗正下方显示一条**采购导航条**，列出购物清单中所有待采购的物品。
-
-- 点击导航条中的物品可快速跳转到该物品的市场页面
-- 导航条与购物清单实时同步：购买完成后物品自动消失
-- 当某物品购齐后，导航条内会显示**内联完成横幅**，提示已购齐并提供「采购下一个 ▶」按钮
-- 全部购齐时显示「🎉 购物清单全部购齐！」完成提示
-- 所有跳转均需玩家手动点击触发，确保每个市场页面请求对应一次人类操作
-- 仅在购物清单有待采购物品时显示，不遮挡空弹窗
-- 可在设置面板中开关此功能
-
-### 9. 市场高亮定位
-
-当市场面板打开时，购物清单中的物品会在市场界面内自动被标记为**橙色高亮边框**，帮助你在密集的物品列表中快速定位需要采购的目标。
-
-- 支持开关定位模式（设置面板中可控制）
-- 通过跳转按钮定位到指定物品时，会自动滚动到该物品位置
-
-### 10. 背包库存实时同步
-
-插件通过 WebSocket 拦截精确追踪库存变化：
-
-- 购买材料后自动扣减购物清单中对应物品的数量
-- 补齐的物品自动移除（收藏物品保留为已补齐状态）
-- 常备数量物品库存低于阈值时自动回填
-- 全部补齐后可自动收起购物清单面板
-- 设置面板实时显示数据源状态（WS库存 / 数据层）
-
-### 11. 房屋建造面板支持
-
-打开房屋升级弹窗时，插件同样会自动计算升级所需的材料缺口，支持一键加入购物清单。
-
-### 12. 制作计划与库存锁定
-
-当制作物品 A 和物品 B 都需要材料 C 时，在 A 的面板加入购物清单后，打开 B 的面板会将 A 买来的材料 C 计入可用库存，导致 B 的缺口被错误缩小。
-
-制作计划机制解决了这个问题：
-
-- 点击「加入购物清单」时自动创建制作计划，记录每种材料的锁定量
-- 其他配方面板计算缺料时，先扣除已有计划的锁定量，再算缺口
-- 制作计划面板可独立拖曳，位置持久化保存，与购物车面板同开同关
-- 通过 WS 监听制作完成事件，自动更新进度并在完成后移除计划
-- 制作次数可在计划面板中直接编辑，锁定量自动重算
-- 可在设置面板中整体开关制作计划功能（关闭后不创建计划也不扣减锁定库存）
-
-### 13. 双语支持（v1.4.0）
-
-插件界面支持**中文**和**英语**两种语言，可在设置面板底部的「界面语言」选项切换。
-
-- 切换后面板自动重建，所有 UI 文本即时更新
-- 物品名称根据当前语言自动从游戏 i18n 资源中解析，无需重新添加购物清单
-- 语言偏好持久化保存，刷新页面后保持上次选择
-
-### 14. Z-score 安全边际（v1.4.2）
-
-生产类技能存在随机节省材料的概率（工匠茶/大工匠增益），实际消耗可能低于理论值，但概率也意味着可能运气不好多消耗一些。Z-score 安全边际基于二项分布模型，计算在指定置信度下需要额外准备多少材料。
-
-- 设置面板中可选择置信度等级：关闭（线性）、Z-90%、Z-95%、Z-99%、Z-99.9%
-- 缺料徽章显示为 `需求量⁺安全边际` 格式（如 `缺 472⁺15`）
-- 暴饮袋子等级支持自动检测或手动指定
-
-### 15. 升级链展示（v1.4.2）
-
-当查看的配方属于升级链（如 棉帽 → 麻帽 → 竹帽 → 丝帽）时，摘要面板自动显示完整的升级链树：
-
-- 展示从当前物品回溯到链尾的所有步骤
-- 每步列出所需非升级材料及其数量与缺口
-- 支持展开/收起，状态持久化
-- 「**加入全链材料**」按钮一键将全链所有步骤的叶子材料汇总加入购物清单（不含中间升级物品）
-- 每个步骤前有**复选框**，可自由选择要加入哪些步骤的材料（v1.4.3）
-
-### 16. 任务追踪面板（v1.4.2）
-
-购物清单头部新增任务追踪按钮，展开后显示当前活跃的生产类任务：
-
-- 显示每个任务的名称、进度条和剩余次数
-- 「**补缺料**」按钮将任务剩余次数所需的缺料（含升级物品）加入购物清单
-- 「**建计划**」按钮为任务创建制作计划
-- 通过 WS 消息实时更新任务进度
-
----
-
-# 三、使用流程
-
-## 场景一：制作页面补料
-
-1. 打开游戏，进入任意制作/技能页面，点击一个制作项目打开详情弹窗
-2. 插件自动计算缺料（含工匠茶减免），弹窗内出现**红色缺料标签**和**汇总面板**
-3. 确认缺料信息后，点击汇总面板中的「**加入购物清单**」按钮
-4. 购物清单抽屉自动弹出，显示所有需要采购的物品及数量
-5. 点击某物品旁的「**直达市场**」按钮，游戏自动跳转到该物品的市场页面
-6. 市场购买弹窗打开后，数量框**自动填入缺料数量**，直接确认购买即可
-7. 购买完成后，购物清单自动核减数量，该物品补齐后导航条内显示**购齐横幅**，手动点击「**采购下一个 ▶**」按钮跳转到下一个待购物品
-8. 重复步骤 6-7 直至全部采购完成
-
-## 场景二：多配方共用材料
-
-1. 打开配方 A 的详情弹窗，点击「加入购物清单」
-2. 插件自动创建制作计划，锁定配方 A 所需的材料数量
-3. 打开配方 B 的详情弹窗，插件计算缺料时会扣除配方 A 已锁定的库存
-4. 配方 B 的缺口显示为正确的数值，不会因为 A 买来的材料而被低估
-5. 在购物车头部点击剪贴板图标可查看所有制作计划及锁定详情
-
-## 场景三：挂机途中补料（炼金/强化等）
-
-1. 在"当前行动"标签页挂机时，插件自动识别该界面并显示 **"计划次数"** 输入框
-2. 输入你接下来计划制作的次数，插件实时计算缺料
-3. 点击「**加入购物清单**」，然后前往市场逐一采购
-4. 全程无需切换到制作页面，也无需中断当前行动
-
----
-
-# 四、注意事项
-
-- 插件仅支持能被正确识别 HRID 的物品（游戏内绝大多数材料均支持）。
-  若某物品显示「无ID」，则无法加入购物清单，但缺料计算仍会正常显示。
-- 行动次数为 ∞ 时，插件会按 **1 次**估算缺料。在制作页面建议手动输入具体次数；
-  在"当前行动"界面可通过插件提供的"计划次数"输入框指定次数。
-- 工匠茶减免仅对生产类技能（酿造/烹饪/锻造/裁缝/制作）生效，炼金和强化不受影响。
-- 炼金和强化的材料由用户动态选择，这些场景仍使用 DOM 解析，确保准确性。
-
----
-
-# 五、致谢名单
-
-## 优化思路提供
+## Ideas & Suggestions
 
 - Mooooooooo
 - AlphB
 - wangchyan
 - mutallip
-- Foreversunny与他的朋友们
+- Foreversunny & friends
 - Joey
 - baozi
 
-## BUG反馈
+## Bug Reports
 
 - Neilyo
 - ccat
 - SuxingX🐊
 
-（排名不分先后）
-
-## 特别鸣谢
-
-- Foreversunny的咖啡
+(In no particular order)
 
 ---
 
-# 六、更新日志
+# III. Changelog
+
+## v1.4.7
+
+### Fixed
+
+- **Full Chain Cart Deduplication**: "Add Full Chain Materials" now deducts existing cart quantities after calculating shortages, only adding the net difference to the shopping list — prevents duplicate additions that inflated purchase quantities
+- **Chain Tree Inventory Subtracts Cart Claims**: Upgrade chain tree display now correctly subtracts cart-claimed quantities from available inventory, showing more accurate shortage figures
 
 ## v1.4.6
 
-### 改进
+### Improved
 
-- **逐步制作计划**：「加入全链材料」现在为每个勾选步骤创建独立制作计划（而非仅最终产物一个聚合计划）。路过产物的材料独立锁定库存，解决多条升级链共享中间材料时缺口误算的问题
-- **链内库存显示优化**：升级链树的材料库存计算现在排除自身链所有步骤的锁定，仅受其他链计划影响，显示更准确
-- **逐步进度追踪**：制作中间步骤时 WS 事件能正确匹配对应步骤的计划，进度条逐步更新
+- **Per-Step Crafting Plans**: "Add Full Chain Materials" now creates independent crafting plans for each checked step (instead of a single aggregate plan for the final product). Intermediate products' materials are locked separately, fixing shortage miscalculation when multiple upgrade chains share intermediate materials
+- **Chain Inventory Display**: Upgrade chain tree's material inventory calculation now excludes all steps of the current chain, only affected by other chains' plans — more accurate display
+- **Per-Step Progress Tracking**: WS events for intermediate crafting steps now correctly match their respective plans, enabling step-by-step progress bar updates
 
 ## v1.4.5
 
-### 修复
+### Fixed
 
-- **WS 库存读取时机**：将脚本加载时机从 `document-idle` 改为 `document-start`，WebSocket 拦截提前至脚本顶层执行，修复部分用户因脚本加载晚于游戏 WS 初始化导致库存数据缺失的问题
+- **WS Inventory Timing**: Changed script loading from `document-idle` to `document-start`, moving WebSocket interception to script top-level execution. Fixes inventory data loss for users whose game WS initialized before the script loaded
 
-### 新增
+### Added
 
-- **全链材料同步制作计划**：升级链「加入全链材料」时自动创建/更新制作计划，锁定全链叶子材料的库存。取消勾选步骤后重新点击可正确回退锁定范围，避免多链共享材料时的缺口误算
-- **使用说明页面**：新增 mate.colacola.cloud/guide 使用说明页面，支持中英双语。设置面板新增「📖 使用说明」按钮
-- **反馈完成标记**：社区反馈支持「✅ 已解决」状态标记，前端自动显示完成徽章
+- **Full Chain Materials Sync to Crafting Plans**: "Add Full Chain Materials" now auto-creates/updates crafting plans, locking leaf materials' inventory. Deselecting steps and re-clicking correctly reduces the locked scope, preventing shortage miscalculation when multiple chains share materials
+- **User Guide Page**: New guide page at mate.colacola.cloud/guide with bilingual support. New "📖 User Guide" button in the settings panel
+- **Feedback Completion Marking**: Community feedback now supports a "✅ Resolved" status badge, automatically displayed on the frontend
 
 ## v1.4.3
 
-### 新增
+### Added
 
-- **余量标记**：材料充足时显示蓝色「余 X」徽章，直观展示做完后还能剩余多少材料。升级链树和升级物品行同样支持余量显示
-- **升级链步骤筛选**：升级链树的每个步骤标题前新增复选框，点击「加入全链材料」时仅添加勾选步骤的材料，方便跳过不需要制作的低级步骤
-- **功能建议与打赏入口**：设置面板底部新增「💡 功能建议」和「❤ 打赏作者」按钮，跳转至外部页面提交建议或查看打赏排行
+- **Surplus Markers**: When materials are sufficient, a blue "+X" badge shows how many extra you'll have after crafting. Upgrade chain tree and upgrade item rows also display surplus indicators
+- **Upgrade Chain Step Filtering**: Each step in the upgrade chain tree now has a checkbox. When clicking "Add Full Chain Materials", only checked steps' materials are added — making it easy to skip lower-tier steps you don't need to craft
+- **Feedback & Donate Buttons**: New "💡 Suggest" and "❤ Donate" buttons at the bottom of the settings panel, linking to external pages for submitting feature suggestions or viewing the donor leaderboard
 
-### 修复
+### Fixed
 
-- **金币不参与工匠茶减免**：金币消耗不再受工匠茶 buff 和 Z-score 安全边际的影响，改为线性计算，缺料结果更准确
-- **同配方多任务计划累加**：多个任务使用相同配方时，制作计划的次数和材料锁定量正确累加，而非覆盖
+- **Gold Coins Excluded from Artisan Tea Reduction**: Gold coin costs are no longer affected by Artisan Tea buff or Z-score safety margin calculations, using linear calculation instead for more accurate shortage results
+- **Same-Recipe Multi-Quest Plan Accumulation**: When multiple quests use the same recipe, crafting plan counts and locked material quantities now correctly accumulate instead of being overwritten
 
 ## v1.4.2
 
-### 新增
+### Added
 
-- **Z-score 安全边际**：基于二项分布的材料安全边际概率模型，支持 Z-90%/95%/99%/99.9% 四档置信度，缺料徽章显示 `需求量⁺安全边际` 格式。设置面板新增 Z-score 等级和暴饮袋子等级选项
-- **升级链树形展示**：升级链配方（如装备升级序列）自动在摘要面板中展示完整链树，列出每步所需材料及缺口。支持展开/收起切换。新增「加入全链材料」按钮，一键汇总全链叶子材料加入购物清单
-- **任务追踪面板**：购物清单新增任务面板，显示当前活跃生产任务的进度，提供「补缺料」和「建计划」快捷按钮。通过 WS 实时更新任务状态
+- **Z-score Safety Margin**: Binomial distribution-based material safety margin model with four confidence levels (Z-90%/95%/99%/99.9%). Shortage badges display in `requirement⁺margin` format. New settings for Z-score level and Guzzling Pouch level override
+- **Upgrade Chain Tree Display**: Upgrade chain recipes (e.g., equipment upgrade sequences) automatically show the full chain tree in the summary panel, listing each step's required materials and shortages. Supports expand/collapse toggle. New "Add Full Chain Materials" button adds all leaf materials from the entire chain to the shopping list
+- **Quest Tracking Panel**: New quest panel in the shopping list showing active production quest progress, with "Add Missing" and "Create Plan" shortcut buttons. Quest status updates in real-time via WS
 
-### 合规性改进
+### Compliance
 
-- **移除回退跳转方案**：删除 `openMarketplaceByVisibleMenu` 函数（通过模拟点击物品+菜单跳转市场的方式），市场跳转现在仅使用 React 内部方法，严格保证 1:1 人机操作对应
+- **Removed Fallback Navigation**: Deleted `openMarketplaceByVisibleMenu` function (which simulated clicking item + context menu to navigate to market). Market navigation now exclusively uses the React internal method, strictly ensuring 1:1 human-to-script action correspondence
 
 ## v1.4.1
 
-### 变更
+### Changed
 
-- **移除「采购自动跳转」功能**：根据mo9反馈，购买完成后自动导航至下一个物品的市场页面不符合 1:1 人机操作对应规则（一次人类操作应只产生一个服务器请求）。该功能及其设置开关已被完全移除
+- **Removed "Auto-Advance After Purchase"**: Based on admin's feedback, automatically navigating to the next item's market page after a purchase violated the 1:1 human-action-to-server-request rule (one human action should produce only one server request). This feature and its settings toggle have been completely removed
 
-### 新增
+### Added
 
-- **导航栏内联购齐横幅**：当某物品购齐并从购物清单移除后，采购导航条内会滑入一条内联横幅，显示购齐提示和下一个待购物品信息，附带「采购下一个 ▶」按钮。点击按钮才会跳转到下一个物品的市场页面，确保每次市场页面跳转都由玩家手动触发
-- **全部购齐横幅**：购物清单全部购齐后，导航栏显示「🎉 购物清单全部购齐！」完成提示，5秒后自动淡出
+- **Inline Fulfilled Banner in Nav Bar**: When an item is fully purchased and removed from the shopping list, an inline banner slides into the purchase navigation bar showing the fulfilled item and next pending item info, with a "Next item ▶" button. Clicking the button navigates to the next item's market page — ensuring every market navigation is triggered by a manual player click
+- **All-Done Banner**: When the entire shopping list is fulfilled, the nav bar displays a "🎉 All items purchased!" completion banner that auto-fades after 5 seconds
 
-### 清理
+### Cleaned Up
 
-- 移除 `_tryAutoAdvanceMarket` 函数及所有调用
-- 移除 `STATE.autoAdvanceEnabled` 及其持久化逻辑
-- 移除设置面板中「采购自动跳转」行及事件处理
-- 移除相关 i18n 键（`s_auto_advance`、`toast_advance_on/off`、`toast_auto_jump`、`toast_all_purchased`）
+- Removed `_tryAutoAdvanceMarket` function and all call sites
+- Removed `STATE.autoAdvanceEnabled` and its persistence logic
+- Removed "Auto-Advance" settings row and event handler
+- Removed related i18n keys (`s_auto_advance`, `toast_advance_on/off`, `toast_auto_jump`, `toast_all_purchased`)
 
 ## v1.4.0
 
-### 新增
+### Added
 
-- **双语支持（i18n）**：插件界面新增英语支持，所有 UI 文本（按钮、标签、Toast 提示、设置面板等 120+ 处）均已翻译。设置面板底部新增「界面语言 / Language」开关，点击可在中文与英语之间切换
-- **物品名称双语解析**：从游戏 i18n 资源中分别提取中英文物品名称映射，切换语言后购物清单和导航条中的物品名称自动更新为对应语言，无需重新添加
+- **Bilingual Support (i18n)**: Full English language support for all UI text (buttons, labels, toast messages, settings panel — 120+ strings translated). New "Language" toggle at the bottom of settings panel to switch between Chinese and English
+- **Bilingual Item Name Resolution**: Extracts both Chinese and English item name mappings from the game's i18n resources. Switching language automatically updates item names in the shopping list and navigation bar — no need to re-add items
 
-### 优化
+### Improved
 
-- **面板默认宽度加宽**：从 346px 调整为 390px，适配英语界面下较长的按钮和标签文本
-- **变量遮蔽修复**：修复 `getItemName` 内部 `const t` 遮蔽全局翻译函数 `t()` 导致回退路径崩溃的问题
+- **Wider Default Panel**: Increased from 346px to 390px to accommodate longer English text
+- **Variable Shadowing Fix**: Fixed `const t` inside `getItemName` shadowing the global `t()` translation function, causing fallback path crashes
 
-### 修复
+### Fixed
 
-- **强化面板库存归零**：修复同物品多个强化等级条目互相覆盖导致库存显示为 0 的问题。改用 hash 主键存储，仅聚合 inventory 位置的物品
-- **暴饮袋子加成丢失**：修复 `_detailMap` 仅含背包物品后找不到装备栏暴饮袋的问题，改用 `getEquippedLevel` 从全位置 hashMap 查找
-- **工匠茶检测不稳定**：优先使用 WS 截获的饮品插槽数据（`actionTypeDrinkSlotsMap`），React Fiber 作为回退
-- **强化面板重建冷却**：游戏每次强化完成后会拆毁并重建面板 DOM，空白期间新增 6 秒冷却保护，防止数据闪烁
-- **跨面板 tab 干扰**：`isCurrentActionMode` 将 tab 搜索限定在 modal 所属的面板容器内
+- **Enhancement Panel Inventory Zeroed**: Fixed same-item multi-enhancement-level entries overwriting each other, causing inventory to show 0. Switched to hash-keyed storage, aggregating only inventory-location items
+- **Guzzling Pouch Bonus Lost**: Fixed `_detailMap` only containing bag items, unable to find equipped Guzzling Pouch. Now uses `getEquippedLevel` to search all locations via hashMap
+- **Artisan Tea Detection Unstable**: Prioritizes WS-captured drink slot data (`actionTypeDrinkSlotsMap`), React Fiber as fallback
+- **Enhancement Panel Rebuild Cooldown**: Game destroys and rebuilds the panel DOM after each enhancement. Added 6-second cooldown protection to prevent data flickering
+- **Cross-Panel Tab Interference**: `isCurrentActionMode` now scopes tab search to the modal's own panel container
 
 ## v1.3.6
 
-### 修复
+### Fixed
 
-- 修复了一个间歇性的小BUG
+- Fixed an intermittent minor bug
 
 ## v1.3.5
 
-### 新增
+### Added
 
-- **制作计划与库存锁定**：点击「加入购物清单」时自动创建制作计划，记录每种材料的锁定量。其他配方计算缺料时先扣除已有计划的锁定量，解决多配方共用材料导致缺口被错误缩小的问题
-- **制作计划面板**：购物车头部新增剪贴板图标按钮，点击可展开独立的制作计划侧面板，查看所有计划的进度、锁定材料详情。支持独立拖曳和位置持久化
-- **制作计划 WS 追踪**：通过监听 `action_completed` 和 `actions_updated` WS 消息，精确追踪制作进度，完成后自动移除计划并释放锁定库存
-- **制作次数可编辑**：在计划面板中可直接修改制作次数，锁定量根据每次用量自动重算
-- 设置面板新增开关：**制作计划**（默认开启）
+- **Crafting Plans & Inventory Locking**: Clicking "Add to Shopping List" auto-creates a crafting plan recording locked material quantities. Other recipes deduct locked quantities before calculating shortages, solving the shared-material miscalculation problem
+- **Crafting Plans Panel**: New clipboard icon in the shopping list header opens an independent side panel showing all plans, progress, and locked material details. Supports independent dragging and position persistence
+- **WS Crafting Tracking**: Monitors `action_completed` and `actions_updated` WS messages for precise progress tracking; auto-removes plans and releases locked inventory on completion
+- **Editable Craft Count**: Craft count can be modified directly in the plan panel; locked quantities auto-recalculate
+- New settings toggle: **Crafting Plans** (default on)
 
-### 修复
+### Fixed
 
-- **房屋升级面板缺料计算失效**：v1.3.4 引入的 `_getVisibleMainContainer()` 将搜索范围限定在 `MainPanel_subPanelContainer` 内，但房屋面板位于独立的 `Modal_modal` 弹窗中不在此范围内，导致无法被发现。修复后 `findActiveHousePanel()` 直接搜索 `document`
-- **材料充足时不再创建空计划**：仅在有缺料且成功加入购物清单时才创建制作计划
-- **修复了在修复修复BUG时候产生的BUG导致的bug。**
+- **House Panel Shortage Calculation Failed**: v1.3.4's `_getVisibleMainContainer()` scoped to `MainPanel_subPanelContainer`, but the house panel lives in a separate `Modal_modal` dialog. Fixed `findActiveHousePanel()` to search `document` directly
+- **Empty Plans Not Created When Materials Sufficient**: Crafting plans only created when there are actual shortages
+- **Fixed a bug caused by fixing the bug that was caused by fixing a bug.**
 
-### 优化
+### Improved
 
-- 其他已知问题优化
+- Other known issue optimizations
 
-## v1.3.4 及更早版本
+## v1.3.4 and Earlier
 
-- 核心功能上线：缺料自动计算、购物清单、市场跳转与高亮
-- 游戏数据层接入（`initClientData`），生产配方不再依赖 DOM 解析
-- 工匠茶与暴饮袋子自动计算材料减免，数据来源标记可视化确认 buff 状态
-- 炼金、强化等动态输入场景智能回退 DOM 解析
-- WebSocket 精确库存追踪，购买后自动扣减购物清单
-- 市场弹窗预填缺料数量、采购导航条、WS 市场数据缓存
-- 收藏保护、常备数量、补齐自动收起
-- 清空分级（主按钮清非收藏 / 下拉清全部）
-- 房屋建造面板缺料计算支持
-- "当前行动"界面手动输入计划次数
-- 面板拖动、锁定、调整大小、物品搜索、数量可编辑、从背包添加
-- 多版本稳定性修复与优化
+- Core features launched: shortage auto-calculation, shopping list, market navigation & highlighting
+- Game data layer integration (`initClientData`); production recipes no longer depend on DOM parsing
+- Artisan Tea & Guzzling Pouch auto-calculation; data source tag for visual buff confirmation
+- Smart fallback to DOM parsing for alchemy, enhancement, and other dynamic-input scenarios
+- WebSocket precise inventory tracking; auto-deduction from shopping list after purchases
+- Market dialog quantity pre-fill, purchase navigation bar, WS market data cache
+- Star protection, reserve quantities, auto-collapse on fulfillment
+- Tiered clearing (main button clears non-starred / dropdown clears all)
+- House building panel shortage calculation support
+- "Current Action" tab manual planned actions input
+- Panel dragging, locking, resizing, item search, editable quantities, pick from inventory
+- Multi-version stability fixes and optimizations
