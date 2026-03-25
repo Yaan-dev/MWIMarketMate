@@ -3,7 +3,7 @@
 // @name:en      MWI Market Mate
 // @name:zh-CN   MWI 市场伴侣
 // @namespace    https://milkywayidle.com/
-// @version      1.4.7
+// @version      1.4.8
 // @description  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
 // @description:en  Crafting/housing material auto-calc, shortage display, shopping list, market highlight. WS inventory + data layer. Bilingual (EN/ZH).
 // @description:zh-CN  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
@@ -26,7 +26,7 @@
     /** 脚本元信息及 localStorage 键名 */
     const SCRIPT = {
         id: "mwi-missing-cart-cn",
-        version: "1.4.7",
+        version: "1.4.8",
         cartKey: "mwi_missing_cart_v1",         // 购物车持久化
         plansKey: "mwi_crafting_plans_v1",      // 制作计划持久化
         fabPosKey: "mwi_missing_cart_fab_pos_v1",    // FAB 悬浮按钮位置
@@ -79,11 +79,16 @@
 
     let _currentLang = "zh"; // 默认中文，可在设置中切换
 
-    /** 从 localStorage 读取语言偏好 */
+    /** 从 localStorage 读取语言偏好
+     *  ★ v1.4.8: 首次使用时自动从游戏 i18nextLng 检测语言 */
     function _loadLangPref() {
         try {
             const v = localStorage.getItem("mwi_mm_lang_v1");
-            if (v === "en" || v === "zh") _currentLang = v;
+            if (v === "en" || v === "zh") { _currentLang = v; return; }
+            // 用户未手动设置过 → 从游戏语言自动推断
+            const gameLang = localStorage.getItem("i18nextLng") || "";
+            _currentLang = gameLang.startsWith("zh") ? "zh" : "en";
+            localStorage.setItem("mwi_mm_lang_v1", _currentLang);
         } catch { /* ignore */ }
     }
     /** 保存语言偏好到 localStorage */
@@ -1027,7 +1032,7 @@
                 const nameCount = this._hridToName?.size || 0;
                 const recipeCount = this._outputToAction?.size || 0;
                 const chainCount = this._upgradeChainMap?.size || 0;
-                console.log(`[mwi-mm] v1.4.3 DataLayer initialized: ${nameCount} names, ${recipeCount} recipes, ${chainCount} upgrade chains`);
+                console.log(`[mwi-mm] v${SCRIPT.version} DataLayer initialized: ${nameCount} names, ${recipeCount} recipes, ${chainCount} upgrade chains`);
                 return true;
             } catch (e) {
                 console.warn("[mwi-mm] 数据层初始化失败:", e);
@@ -1385,7 +1390,7 @@
             }
         });
 
-        console.log("[mwi-mm] v1.4.7 WebSocket interceptor registered (lang=" + _currentLang + ")");
+        console.log("[mwi-mm] v" + SCRIPT.version + " WebSocket interceptor registered (lang=" + _currentLang + ")");
     }
 
     // ★ v1.4.5: 尽早安装 WS 拦截器（不依赖 DOM，避免 document-idle 时错过 init_character_data）
@@ -2633,6 +2638,19 @@
         return null;
     }
 
+    // ★ v1.4.8: Housing 面板签名缓存 — 数据未变时跳过 DOM 写入，减少 mutation 风暴
+    let _lastHouseSignature = null;
+
+    /** 根据面板标题 + 需求格子文本生成轻量签名 */
+    function getHousingSignature(panel) {
+        const name = panel.querySelector('[class*="HousePanel_header"]')?.textContent?.trim() || '';
+        const costs = [...panel.querySelectorAll('[class*="HousePanel_itemRequirementCell"]')]
+            .map(el => el.textContent.trim())
+            .join('|');
+        return name + '::' + costs;
+    }
+
+
     // ── v1.3.0: 数据层路径 — 从面板标题识别配方 ──────────────────
 
     /** 从技能面板中提取配方标题文字 */
@@ -2819,8 +2837,12 @@
      */
     function extractRequirements(modal) {
         if (_dataLayer.ready) {
-            const dataResult = _buildRequirementsFromData(modal);
-            if (dataResult) return dataResult;
+            try {
+                const dataResult = _buildRequirementsFromData(modal);
+                if (dataResult) return dataResult;
+            } catch (e) {
+                console.error("[mwi-mm] _buildRequirementsFromData failed, falling back to DOM:", e);
+            }
         }
 
         const requirementsEl = modal.querySelector(SEL.requirements);
@@ -4958,10 +4980,30 @@
         let data = null;
 
         if (modal) {
-            data = extractHouseRequirements(modal);
+            // ★ v1.4.8: Housing 签名缓存 — 签名未变时跳过后续处理，减少 mutation 风暴
+            const hSig = getHousingSignature(modal);
+            if (hSig && hSig === _lastHouseSignature) {
+                syncMarketLocator();
+                return;
+            }
+            _lastHouseSignature = hSig;
+            try {
+                data = extractHouseRequirements(modal);
+            } catch (e) {
+                console.error("[mwi-mm] extractHouseRequirements failed:", e);
+                return;
+            }
         } else {
+            _lastHouseSignature = null;
             modal = findActiveModal();
-            if (modal) data = extractRequirements(modal);
+            if (modal) {
+                try {
+                    data = extractRequirements(modal);
+                } catch (e) {
+                    console.error("[mwi-mm] extractRequirements failed:", e);
+                    return;
+                }
+            }
         }
 
         // ★ v1.3.7 修复 B: 强化面板重建冷却保护
@@ -5021,11 +5063,29 @@
         STATE.currentData = data;
         STATE.lastDataSignature = signature;
 
-        renderInlineBadges(modal, data);
-        renderSummaryPanel(modal, data);
-        // v1.4.3: 渲染展开的子配方树
-        const summaryPanel = modal.querySelector(".mwi-mm-summary-panel");
-        if (summaryPanel && data._dataLayerUsed) renderChainSubRows(summaryPanel, data);
+        let renderFailed = false;
+        try {
+            renderInlineBadges(modal, data);
+        } catch (e) {
+            renderFailed = true;
+            console.error("[mwi-mm] renderInlineBadges failed:", e, { modal, reqCount: data.requirements?.length, hasInputEls: data.requirements?.some(r => r.inputEl) });
+        }
+        try {
+            renderSummaryPanel(modal, data);
+        } catch (e) {
+            renderFailed = true;
+            console.error("[mwi-mm] renderSummaryPanel failed:", e);
+        }
+        try {
+            // v1.4.3: 渲染展开的子配方树
+            const summaryPanel = modal.querySelector(".mwi-mm-summary-panel");
+            if (summaryPanel && data._dataLayerUsed) renderChainSubRows(summaryPanel, data);
+        } catch (e) {
+            console.error("[mwi-mm] renderChainSubRows failed:", e);
+        }
+
+        // 渲染失败时清除签名缓存，确保下次刷新会重试渲染
+        if (renderFailed) STATE.lastDataSignature = "";
 
         if (data.totalMissingTypes > 0) setAction(t("action_calculated", data.totalMissingTypes, formatQty(data.totalMissingQty)));
         else setAction(t("action_sufficient"));
@@ -5037,7 +5097,11 @@
         if (STATE.refreshTimer) clearTimeout(STATE.refreshTimer);
         STATE.refreshTimer = setTimeout(() => {
             STATE.refreshTimer = null;
-            refreshNow();
+            try {
+                refreshNow();
+            } catch (e) {
+                console.error("[mwi-mm] refreshNow() uncaught error:", e);
+            }
         }, delay);
     }
 
@@ -5049,13 +5113,15 @@
         if (STATE.observer) STATE.observer.disconnect();
 
         STATE.observer = new MutationObserver((mutations) => {
+            try {
             if (isObserverSuppressed()) return;
 
             /** 判断节点是否属于本插件（避免自触发） */
             const isPluginNode = (node) => {
                 if (!(node instanceof Element)) return false;
-                if (node.id && node.id.startsWith("mwi-mm-")) return true;
-                if ([...node.classList].some((cls) => cls.startsWith("mwi-mm-"))) return true;
+                const nodeId = typeof node.id === "string" ? node.id : (node.id?.baseVal || "");
+                if (nodeId && nodeId.startsWith("mwi-mm-")) return true;
+                if (node.classList?.length && [...node.classList].some((cls) => cls.startsWith("mwi-mm-"))) return true;
                 if (node.closest?.(".mwi-mm-summary-panel")
                     || node.closest?.("#mwi-mm-cart-drawer")
                     || node.closest?.("#mwi-mm-cart-tab")
@@ -5077,6 +5143,10 @@
             });
 
             if (hasExternalMutation) scheduleRefresh(90);
+            } catch (e) {
+                console.error("[mwi-mm] MutationObserver callback error:", e);
+                scheduleRefresh(200);
+            }
         });
 
         STATE.observer.observe(document.body, { childList: true, subtree: true, characterData: true });
@@ -5161,7 +5231,7 @@
         /** 初始化预填模块 */
         init() {
             this._setupObserver();
-            console.log("[mwi-mm] v1.3.4 市场预填模块已初始化");
+            console.log("[mwi-mm] v" + SCRIPT.version + " 市场预填模块已初始化");
         },
 
         /** 监听 DOM 变化检测市场购买弹窗的出现 */
@@ -5252,7 +5322,7 @@
                     this._injectNav();
                 }
             };
-            console.log("[mwi-mm] v1.4.1 采购导航条模块已初始化（含内联购齐横幅）");
+            console.log("[mwi-mm] v" + SCRIPT.version + " 采购导航条模块已初始化（含内联购齐横幅）");
         },
 
         /** 监听 DOM 变化检测市场面板显示/隐藏 */
@@ -5642,7 +5712,7 @@
         const dlLabel = _dataLayer.ready ? t("dl_ok") : t("dl_fallback");
         const srcLabel = _capturedClientData ? (_capturedClientData._src || t("cache")) : t("dl_fallback");
         const plansLabel = STATE.craftingPlans.size > 0 ? t("plans_n", STATE.craftingPlans.size) : t("no_plans");
-        setAction(t("action_startup", "1.4.7", wsLabel, dlLabel, plansLabel, srcLabel));
+        setAction(t("action_startup", SCRIPT.version, wsLabel, dlLabel, plansLabel, srcLabel));
         scheduleRefresh(80);
     }
 
