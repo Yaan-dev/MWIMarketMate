@@ -23,7 +23,7 @@
 
   function buildChinese() {
     return ''
-    + '<h2>一、功能详解</h2>'
+    + '<h2>二、功能详解</h2>'
 
     + '<h3>1. 缺少材料自动计算</h3>'
     + '<p>打开游戏中任意技能的制作/行动详情后，插件会自动读取以下信息：</p>'
@@ -69,7 +69,7 @@
     + '<ul><li>点击「加入购物清单」时自动创建制作计划，记录每种材料的锁定量</li><li>其他配方面板计算缺料时，先扣除已有计划的锁定量</li><li>制作计划面板可独立拖曳，支持进度追踪</li><li>通过 WS 监听制作完成事件，自动更新进度</li></ul>'
 
     + '<h3>13. 双语支持</h3>'
-    + '<p>插件界面支持<b>中文</b>和<b>英语</b>两种语言，可在设置面板底部切换。物品名称根据当前语言自动解析。</p>'
+    + '<p>插件界面支持<b>中文</b>和<b>英语</b>两种语言，自动跟随游戏语言设置（<code>i18nextLng</code>）。物品名称根据当前语言自动解析。</p>'
 
     + '<h3>14. Z-score 安全边际</h3>'
     + '<p>基于二项分布的材料安全边际概率模型，可选 Z-90%/95%/99%/99.9% 四档置信度。缺料徽章显示为 <code>需求量⁺安全边际</code> 格式。</p>'
@@ -80,7 +80,13 @@
     + '<h3>16. 任务追踪面板</h3>'
     + '<p>购物清单头部新增任务追踪按钮，展开后显示当前活跃的生产类任务，包括进度条和剩余次数。提供「<b>补缺料</b>」和「<b>建计划</b>」快捷按钮。</p>'
 
-    + '<h2>二、使用流程</h2>'
+    + '<h3>17. 市场实时价格</h3>'
+    + '<p>购物清单中每个物品旁会显示当前的<b>市场价格</b>和<b>行小计</b>（单价 × 缺料数量）。价格数据来自游戏官方 <code>marketplace.json</code> API，每小时自动刷新一次。价格优先级为：卖单价 > 买单价 > 均价。无市场数据的物品显示「--」。可在设置面板中独立开关。</p>'
+
+    + '<h3>18. 购物车总价栏</h3>'
+    + '<p>购物清单底部显示所有待购物品的<b>预估总花费</b>。无法获取市场价格的物品会单独标注数量，不计入总价。可在设置面板中独立开关。</p>'
+
+    + '<h2>三、使用流程</h2>'
 
     + '<h3>场景一：制作页面补料</h3>'
     + '<ol><li>打开游戏，进入任意制作/技能页面，点击一个制作项目打开详情弹窗</li><li>插件自动计算缺料（含工匠茶减免），弹窗内出现<b>红色缺料标签</b>和<b>汇总面板</b></li><li>确认缺料信息后，点击汇总面板中的「<b>加入购物清单</b>」按钮</li><li>购物清单抽屉自动弹出，显示所有需要采购的物品及数量</li><li>点击某物品旁的「<b>直达市场</b>」按钮，游戏自动跳转到该物品的市场页面</li><li>市场购买弹窗打开后，数量框<b>自动填入缺料数量</b>，直接确认购买即可</li><li>购买完成后，购物清单自动核减数量，手动点击「<b>采购下一个 ▶</b>」跳转到下一个待购物品</li><li>重复步骤 6-7 直至全部采购完成</li></ol>'
@@ -140,7 +146,7 @@
     + '<ul><li>Clicking "Add to Shopping List" auto-creates a crafting plan with locked quantities</li><li>Other recipe panels deduct locked quantities before calculating shortages</li><li>Plans panel supports independent dragging and progress tracking</li><li>WS events track crafting progress; plans auto-complete on finish</li></ul>'
 
     + '<h3>13. Bilingual Support</h3>'
-    + '<p>The plugin supports both <b>Chinese</b> and <b>English</b>, switchable via settings. Item names resolve from the game\'s i18n resources based on current language.</p>'
+    + '<p>The plugin supports both <b>Chinese</b> and <b>English</b>, automatically following the game\'s language setting (<code>i18nextLng</code>). Item names resolve from the game\'s i18n resources based on current language.</p>'
 
     + '<h3>14. Z-score Safety Margin</h3>'
     + '<p>Binomial distribution-based material safety margin model with four confidence levels: Z-90%/95%/99%/99.9%. Shortage badges display as <code>requirement\u207a margin</code> format.</p>'
@@ -150,6 +156,12 @@
 
     + '<h3>16. Quest Tracking Panel</h3>'
     + '<p>A quest tracking button reveals active production quests with progress bars and remaining counts. Provides "<b>Add Missing</b>" and "<b>Create Plan</b>" shortcut buttons.</p>'
+
+    + '<h3>17. Market Price Display</h3>'
+    + '<p>Each item in the shopping list shows the current <b>market price</b> and <b>line subtotal</b> (unit price \u00d7 shortage quantity). Price data comes from the game\'s official <code>marketplace.json</code> API, refreshed hourly. Price priority: ask > bid > average. Items without market data show "\u2014". Can be toggled independently in settings.</p>'
+
+    + '<h3>18. Cart Total Bar</h3>'
+    + '<p>The bottom of the shopping list shows the <b>estimated total cost</b> for all pending items. Items without market prices are noted separately and excluded from the total. Can be toggled independently in settings.</p>'
 
     + '<h2>III. Workflows</h2>'
 
