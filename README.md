@@ -75,6 +75,18 @@ The core purpose of this plugin is to serve as a **crafting material shortage ca
 
 # III. Changelog
 
+## v1.4.8
+
+### Added
+
+- **Auto Language Detection**: Automatically detects game language (`i18nextLng`) on first install — no need to manually switch plugin language. Users who have already set their language preference are unaffected
+
+### Improved
+
+- **Housing Panel Signature Cache**: Skips DOM writes when housing panel data hasn't changed, reducing MutationObserver chain reactions when running alongside other extensions (Toolasha / Shopping List)
+- **Full Pipeline Error Handling**: Data extraction, badge rendering, and summary panel rendering now each have independent try-catch protection. Errors are logged to the console instead of failing silently. On render failure, the signature cache is automatically cleared to ensure retry on the next refresh
+- **Unified Console Version Strings**: All console.log version numbers now dynamically read from `SCRIPT.version` instead of using hardcoded legacy version strings
+
 ## v1.4.7
 
 ### Fixed
