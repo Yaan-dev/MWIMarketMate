@@ -3,7 +3,7 @@
 // @name:en      MWI Market Mate
 // @name:zh-CN   MWI 市场伴侣
 // @namespace    https://milkywayidle.com/
-// @version      1.4.8
+// @version      1.5.0
 // @description  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
 // @description:en  Crafting/housing material auto-calc, shortage display, shopping list, market highlight. WS inventory + data layer. Bilingual (EN/ZH).
 // @description:zh-CN  制作页/房屋材料自动计算、缺料显示、购物清单、市场高亮。WS精确库存+独立数据层。双语支持(EN/ZH)。
@@ -75,25 +75,16 @@
     const CART_LIST_MAX_HEIGHT_DEFAULT = 406;
 
     // ── v1.4.0: 国际化 (i18n) 双语支持 ─────────────────────────────
-    //   语言通过设置面板手动切换，持久化到 localStorage。
+    //   ★ v1.5.0: 始终自动跟随游戏 i18nextLng 语言设置，不再手动切换。
 
-    let _currentLang = "zh"; // 默认中文，可在设置中切换
+    let _currentLang = "zh"; // 默认中文
 
-    /** 从 localStorage 读取语言偏好
-     *  ★ v1.4.8: 首次使用时自动从游戏 i18nextLng 检测语言 */
+    /** 从游戏 i18nextLng 自动检测语言 */
     function _loadLangPref() {
         try {
-            const v = localStorage.getItem("mwi_mm_lang_v1");
-            if (v === "en" || v === "zh") { _currentLang = v; return; }
-            // 用户未手动设置过 → 从游戏语言自动推断
             const gameLang = localStorage.getItem("i18nextLng") || "";
             _currentLang = gameLang.startsWith("zh") ? "zh" : "en";
-            localStorage.setItem("mwi_mm_lang_v1", _currentLang);
         } catch { /* ignore */ }
-    }
-    /** 保存语言偏好到 localStorage */
-    function _saveLangPref() {
-        try { localStorage.setItem("mwi_mm_lang_v1", _currentLang); } catch { /* ignore */ }
     }
 
     /** 获取当前 locale（用于 localeCompare 排序） */
@@ -334,6 +325,26 @@
         "quest_remaining": { zh: "还需 {0} 次", en: "{0} remaining" },
         "toast_quest_added": { zh: "已添加任务材料：{0} 种", en: "Added quest materials: {0} types" },
         "toast_quest_plan": { zh: "已为任务创建计划：{0}", en: "Created plan for quest: {0}" },
+
+        // ── v1.5.0: 设置分组标题 ──
+        "sg_market": { zh: "市场与采购", en: "Market & Shopping" },
+        "sg_crafting": { zh: "制作辅助", en: "Crafting" },
+        "sg_system": { zh: "系统", en: "System" },
+
+        // ── v1.5.0: 价格功能 ──
+        "s_price_display": { zh: "价格显示", en: "Price Display" },
+        "s_price_display_desc": { zh: "在购物清单中显示物品市场价格", en: "Show market prices in shopping list" },
+        "s_cart_total": { zh: "购物车总价", en: "Cart Total" },
+        "s_cart_total_desc": { zh: "在购物清单底部显示预估总花费", en: "Show estimated total cost at bottom of list" },
+        "toast_price_on": { zh: "价格显示已开启", en: "Price display enabled" },
+        "toast_price_off": { zh: "价格显示已关闭", en: "Price display disabled" },
+        "toast_cart_total_on": { zh: "购物车总价已开启", en: "Cart total enabled" },
+        "toast_cart_total_off": { zh: "购物车总价已关闭", en: "Cart total disabled" },
+        "price_loading": { zh: "加载中...", en: "Loading..." },
+        "price_no_data": { zh: "--", en: "--" },
+        "price_total_label": { zh: "预估总价", en: "Est. Total" },
+        "price_unpriced": { zh: "{0}件无报价", en: "{0} unpriced" },
+        "price_at": { zh: "@", en: "@" },
     };
 
     /**
@@ -393,6 +404,9 @@
         // v1.4.3: Z-score 安全边际
         zScoreIndex: 0,               // Z_OPTIONS 索引；0 = 关闭（线性）
         guzzlingPouchLevel: -1,       // -1 = 自动检测；0-20 = 手动指定
+        // v1.5.0: 价格功能
+        priceEnabled: true,           // 价格显示开关
+        cartTotalEnabled: true,       // 购物车总价显示开关
         // v1.4.3: 升级链树
         chainTreeOpen: false,          // 升级链树是否展开
         // v1.4.3: 任务面板
@@ -737,6 +751,95 @@
             return Z_OPTIONS[STATE.zScoreIndex]?.z || 0;
         }
     };
+
+    // ── v1.5.0: 市场价格数据模块 ──────────────────────────────────
+    const _marketPrice = {
+        _cache: null,           // Map<bareId, { ask, bid, avg, vol }>
+        _lastFetch: 0,
+        _loading: false,
+        _error: false,
+        REFRESH_INTERVAL: 3600_000, // 1 小时
+
+        /** 确保数据已加载（懒加载 + 缓存 1 小时） */
+        async ensureData() {
+            if (this._loading) return Boolean(this._cache);
+            if (this._cache && Date.now() - this._lastFetch < this.REFRESH_INTERVAL) return true;
+            this._loading = true;
+            this._error = false;
+            try {
+                const base = location.hostname.includes("milkywayidlecn")
+                    ? "https://www.milkywayidlecn.com" : "https://www.milkywayidle.com";
+                const url = base + "/game_data/marketplace.json";
+                console.log("[mwi-mm] Fetching market prices:", url);
+                const resp = await fetch(url);
+                if (!resp.ok) {
+                    console.error("[mwi-mm] Market price fetch failed, status:", resp.status);
+                    this._error = true;
+                    return false;
+                }
+                const raw = await resp.json();
+                // API 返回 { timestamp, marketData: { "/items/xxx": { "0": {...}, ... }, ... } }
+                const data = raw && raw.marketData ? raw.marketData : raw;
+                if (!data || typeof data !== "object") {
+                    console.error("[mwi-mm] Market price data is invalid:", typeof data);
+                    this._error = true;
+                    return false;
+                }
+                this._cache = new Map();
+                let count = 0;
+                for (const [hrid, levels] of Object.entries(data)) {
+                    if (!hrid.startsWith("/items/")) continue;
+                    const info = levels["0"] || levels[0];
+                    if (!info) continue;
+                    const bareId = hrid.replace(/^\/items\//, "");
+                    this._cache.set(bareId, {
+                        ask: info.a ?? -1,
+                        bid: info.b ?? -1,
+                        avg: info.p ?? -1,
+                        vol: info.v ?? 0
+                    });
+                    count++;
+                }
+                this._lastFetch = Date.now();
+                console.log("[mwi-mm] Market prices loaded:", count, "items");
+                return true;
+            } catch (err) {
+                console.error("[mwi-mm] Market price fetch error:", err);
+                this._error = true;
+                return false;
+            } finally {
+                this._loading = false;
+            }
+        },
+
+        /** 获取物品的采购价格（同步，从内存读取）
+         *  优先级: ask > bid > avg > -1 */
+        getPrice(bareId) {
+            if (!this._cache) return -1;
+            const info = this._cache.get(bareId);
+            if (!info) return -1;
+            if (info.ask > 0) return info.ask;
+            if (info.bid > 0) return info.bid;
+            if (info.avg > 0) return info.avg;
+            return -1;
+        },
+
+        /** 数据是否就绪 */
+        get ready() { return Boolean(this._cache); },
+        /** 是否正在加载 */
+        get loading() { return this._loading; }
+    };
+
+    /** 格式化金币数量（简短形式） */
+    function formatGold(n) {
+        if (!Number.isFinite(n) || n < 0) return "--";
+        if (n < 1000) return String(Math.round(n));
+        if (n < 10000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+        if (n < 1000000) return Math.round(n / 1000) + "K";
+        if (n < 10000000) return (n / 1000000).toFixed(2).replace(/0$/, "").replace(/\.$/, "") + "M";
+        if (n < 1000000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+        return (n / 1000000000).toFixed(2).replace(/0$/, "").replace(/\.$/, "") + "B";
+    }
 
     // ── v1.3.5: 制作计划追踪器 ──────────────────────────────────
     const _craftingPlanTracker = {
@@ -2385,7 +2488,9 @@
                 craftingPlansEnabled: STATE.craftingPlansEnabled,
                 questPanelEnabled: STATE.questPanelEnabled,
                 zScoreIndex: STATE.zScoreIndex,
-                guzzlingPouchLevel: STATE.guzzlingPouchLevel
+                guzzlingPouchLevel: STATE.guzzlingPouchLevel,
+                priceEnabled: STATE.priceEnabled,
+                cartTotalEnabled: STATE.cartTotalEnabled
             }));
         } catch (err) { /* ignore */ }
     }
@@ -2407,6 +2512,8 @@
             if (typeof parsed.questPanelEnabled === "boolean") STATE.questPanelEnabled = parsed.questPanelEnabled;
             if (typeof parsed.zScoreIndex === "number" && parsed.zScoreIndex >= 0 && parsed.zScoreIndex < Z_OPTIONS.length) STATE.zScoreIndex = parsed.zScoreIndex;
             if (typeof parsed.guzzlingPouchLevel === "number" && parsed.guzzlingPouchLevel >= -1 && parsed.guzzlingPouchLevel <= 20) STATE.guzzlingPouchLevel = parsed.guzzlingPouchLevel;
+            if (typeof parsed.priceEnabled === "boolean") STATE.priceEnabled = parsed.priceEnabled;
+            if (typeof parsed.cartTotalEnabled === "boolean") STATE.cartTotalEnabled = parsed.cartTotalEnabled;
         } catch (err) { /* ignore */ }
     }
 
@@ -3466,6 +3573,10 @@
         STATE.ui.tab.classList.add("is-open");
         triggerInventorySync(30);
         renderPlansUI();
+        // v1.5.0: 价格功能启用时，打开面板时懒加载价格数据
+        if (STATE.priceEnabled && !_marketPrice.ready) {
+            _marketPrice.ensureData().then(() => renderCart());
+        }
     }
 
     /** 关闭购物车抽屉面板 */
@@ -3928,20 +4039,24 @@
             </div>
             <div class="mwi-mm-settings-panel" style="display:none;">
                 <div class="mwi-mm-settings-scroll">
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_lock_panel")}</div><div class="mwi-mm-settings-desc">${t("s_lock_panel_desc")}</div></div><button data-act="toggle-lock" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-group-label">${t("sg_market")}</div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_market_locate")}</div><div class="mwi-mm-settings-desc">${t("s_market_locate_desc")}</div></div><button data-act="toggle-locate" class="mwi-mm-toggle-btn"></button></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_incl_upgrade")}</div><div class="mwi-mm-settings-desc">${t("s_incl_upgrade_desc")}</div></div><button data-act="toggle-include-upgrade" class="mwi-mm-toggle-btn"></button></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_inv_sync")}</div><div class="mwi-mm-settings-desc">${t("s_inv_sync_desc")}</div></div><button data-act="toggle-inventory-sync" class="mwi-mm-toggle-btn"></button></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_auto_collapse")}</div><div class="mwi-mm-settings-desc">${t("s_auto_collapse_desc")}</div></div><button data-act="toggle-auto-collapse" class="mwi-mm-toggle-btn"></button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_auto_prefill")}</div><div class="mwi-mm-settings-desc">${t("s_auto_prefill_desc")}</div></div><button data-act="toggle-auto-prefill" class="mwi-mm-toggle-btn"></button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_purchase_nav")}</div><div class="mwi-mm-settings-desc">${t("s_purchase_nav_desc")}</div></div><button data-act="toggle-purchase-nav" class="mwi-mm-toggle-btn"></button></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_crafting_plans")}</div><div class="mwi-mm-settings-desc">${t("s_crafting_plans_desc")}</div></div><button data-act="toggle-crafting-plans" class="mwi-mm-toggle-btn"></button></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_quest_tracking")}</div><div class="mwi-mm-settings-desc">${t("s_quest_tracking_desc")}</div></div><button data-act="toggle-quest-tracking" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_price_display")}</div><div class="mwi-mm-settings-desc">${t("s_price_display_desc")}</div></div><button data-act="toggle-price-display" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_cart_total")}</div><div class="mwi-mm-settings-desc">${t("s_cart_total_desc")}</div></div><button data-act="toggle-cart-total" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-group-label">${t("sg_crafting")}</div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_incl_upgrade")}</div><div class="mwi-mm-settings-desc">${t("s_incl_upgrade_desc")}</div></div><button data-act="toggle-include-upgrade" class="mwi-mm-toggle-btn"></button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_zscore")}</div><div class="mwi-mm-settings-desc">${t("s_zscore_desc")}</div></div><select data-act="change-zscore" class="mwi-mm-select">${Z_OPTIONS.map((opt, i) => `<option value="${i}"${i === STATE.zScoreIndex ? " selected" : ""}>${i === 0 ? t("s_zscore_none") : opt.label}</option>`).join("")}</select></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_guzzling")}</div><div class="mwi-mm-settings-desc">${t("s_guzzling_desc")}</div></div><select data-act="change-guzzling" class="mwi-mm-select"><option value="-1"${STATE.guzzlingPouchLevel === -1 ? " selected" : ""}>${t("s_guzzling_auto")}</option>${Array.from({ length: 21 }, (_, i) => `<option value="${i}"${STATE.guzzlingPouchLevel === i ? " selected" : ""}>+${i}</option>`).join("")}</select></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_crafting_plans")}</div><div class="mwi-mm-settings-desc">${t("s_crafting_plans_desc")}</div></div><button data-act="toggle-crafting-plans" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_quest_tracking")}</div><div class="mwi-mm-settings-desc">${t("s_quest_tracking_desc")}</div></div><button data-act="toggle-quest-tracking" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-group-label">${t("sg_system")}</div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_lock_panel")}</div><div class="mwi-mm-settings-desc">${t("s_lock_panel_desc")}</div></div><button data-act="toggle-lock" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_inv_sync")}</div><div class="mwi-mm-settings-desc">${t("s_inv_sync_desc")}</div></div><button data-act="toggle-inventory-sync" class="mwi-mm-toggle-btn"></button></div>
+                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_auto_collapse")}</div><div class="mwi-mm-settings-desc">${t("s_auto_collapse_desc")}</div></div><button data-act="toggle-auto-collapse" class="mwi-mm-toggle-btn"></button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_manual_sync")}</div><div class="mwi-mm-settings-desc">${t("s_manual_sync_desc")}</div></div><button data-act="manual-sync" class="mwi-mm-toggle-btn" style="font-size:12px">${t("s_manual_sync_btn")}</button></div>
                     <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_reset_size")}</div><div class="mwi-mm-settings-desc">${t("s_reset_size_desc")}</div></div><button data-act="reset-size" class="mwi-mm-toggle-btn" style="font-size:12px">${t("s_reset_btn")}</button></div>
-                    <div class="mwi-mm-settings-row"><div class="mwi-mm-settings-info"><div class="mwi-mm-settings-label">${t("s_language")}</div><div class="mwi-mm-settings-desc">${t("s_language_desc")}</div></div><button data-act="toggle-lang" class="mwi-mm-toggle-btn" style="font-size:12px">${_currentLang === "zh" ? t("s_lang_zh") : t("s_lang_en")}</button></div>
                     <div class="mwi-mm-settings-row" style="justify-content:center;padding:10px 4px;gap:8px;"><button data-act="open-guide" class="mwi-mm-toggle-btn" style="flex:1;font-size:12px">${t("s_guide_btn")}</button><button data-act="open-community" class="mwi-mm-toggle-btn" style="flex:1;font-size:12px">${t("s_community_btn")}</button></div>
                 </div>
             </div>
@@ -4419,11 +4534,18 @@
                 return;
             }
 
-            // v1.4.0: 语言切换
-            if (act === "toggle-lang") {
-                _currentLang = _currentLang === "zh" ? "en" : "zh";
-                _saveLangPref();
-                _rebuildDrawerForLang();
+            // v1.5.0: 价格显示开关
+            if (act === "toggle-price-display") {
+                STATE.priceEnabled = !STATE.priceEnabled;
+                saveToggles(); renderSettingsToggles(); renderCart();
+                showToast(STATE.priceEnabled ? t("toast_price_on") : t("toast_price_off"), "info");
+                if (STATE.priceEnabled) _marketPrice.ensureData().then(() => renderCart());
+                return;
+            }
+            if (act === "toggle-cart-total") {
+                STATE.cartTotalEnabled = !STATE.cartTotalEnabled;
+                saveToggles(); renderSettingsToggles(); renderCart();
+                showToast(STATE.cartTotalEnabled ? t("toast_cart_total_on") : t("toast_cart_total_off"), "info");
                 return;
             }
 
@@ -4583,7 +4705,9 @@
             "toggle-auto-prefill": STATE.autoPrefillEnabled,
             "toggle-purchase-nav": STATE.purchaseNavEnabled,
             "toggle-crafting-plans": STATE.craftingPlansEnabled,
-            "toggle-quest-tracking": STATE.questPanelEnabled
+            "toggle-quest-tracking": STATE.questPanelEnabled,
+            "toggle-price-display": STATE.priceEnabled,
+            "toggle-cart-total": STATE.cartTotalEnabled
         };
 
         for (const [act, enabled] of Object.entries(toggleMap)) {
@@ -4592,14 +4716,6 @@
             btn.classList.toggle("is-on", enabled);
             btn.classList.toggle("is-off", !enabled);
             btn.textContent = enabled ? t("toggle_on") : t("toggle_off");
-        }
-
-        // v1.4.0: 语言按钮特殊处理
-        const langBtn = panel.querySelector('button[data-act="toggle-lang"]');
-        if (langBtn) {
-            langBtn.textContent = _currentLang === "zh" ? t("s_lang_zh") : t("s_lang_en");
-            langBtn.classList.toggle("is-on", _currentLang === "en");
-            langBtn.classList.toggle("is-off", _currentLang !== "en");
         }
 
         // v1.4.3: Z-score / Guzzling Pouch 下拉框同步
@@ -4766,6 +4882,54 @@
 
     let _onCartRendered = null;
 
+    /** v1.5.0: 构建单行价格 HTML */
+    function _buildPriceHtml(row) {
+        if (!STATE.priceEnabled) return "";
+        const isFulfilled = row.starred && row.quantity <= 0;
+        if (isFulfilled) return "";
+        const qty = Math.ceil(row.quantity || 0);
+        if (qty <= 0) return "";
+        if (isCoinItem(row.itemId)) return "";
+        if (_marketPrice.loading) {
+            return `<span class="mwi-mm-price-info mwi-mm-price-loading">${t("price_loading")}</span>`;
+        }
+        if (!_marketPrice.ready) return "";
+        const bareId = normalizeCartItemId(row.itemId);
+        const price = _marketPrice.getPrice(bareId);
+        if (price <= 0) {
+            return `<span class="mwi-mm-price-info mwi-mm-price-none">${t("price_at")} ${t("price_no_data")}</span>`;
+        }
+        const total = price * qty;
+        return `<span class="mwi-mm-price-info">${t("price_at")} ${formatGold(price)} · ${formatGold(total)}</span>`;
+    }
+
+    /** v1.5.0: 更新已存在行的价格元素 */
+    function _updatePriceCell(rowEl, row) {
+        const qtyContainer = rowEl.querySelector(".meta .qty");
+        if (!qtyContainer) return;
+        let priceEl = qtyContainer.querySelector(".mwi-mm-price-info");
+        const html = _buildPriceHtml(row);
+        if (!html) {
+            if (priceEl) priceEl.remove();
+            return;
+        }
+        if (priceEl) {
+            // 用临时容器解析新 HTML 并比较
+            const tmp = document.createElement("span");
+            tmp.innerHTML = html;
+            const newEl = tmp.firstElementChild;
+            if (newEl && priceEl.textContent !== newEl.textContent) {
+                priceEl.replaceWith(newEl);
+            }
+        } else {
+            // 插入价格元素（在 qty-input 之后，refill-tag 之前）
+            const frag = document.createElement("span");
+            frag.innerHTML = html;
+            const el = frag.firstElementChild;
+            if (el) qtyContainer.appendChild(el);
+        }
+    }
+
     /** 渲染购物车列表（增量 DOM 更新） */
     function renderCart() {
         if (!STATE.ui.cartList) return;
@@ -4883,6 +5047,8 @@
                         }
                     }
                 }
+                // v1.5.0: 价格更新
+                _updatePriceCell(existing, row);
                 _updateThresholdLine(existing, row);
                 existing.classList.toggle("is-target", isTarget);
 
@@ -4920,6 +5086,8 @@
                         + ` data-item-id="${escapeHtml(row.itemId)}" value="${escapeHtml(qtyText)}" />`;
                     if (isRefilled) qtyHtml += ` <span class="mwi-mm-refill-tag">${t("auto_refill")}</span>`;
                 }
+                // v1.5.0: 价格信息
+                qtyHtml += _buildPriceHtml(row);
 
                 // 常备量区域 HTML
                 let thresholdHtml = "";
@@ -4964,8 +5132,54 @@
                 prevEl = div;
             }
         }
+        // v1.5.0: 总价栏
+        _renderCartTotalBar(entries);
         renderStatus();
         if (_onCartRendered) _onCartRendered();
+    }
+
+    /** v1.5.0: 渲染购物车底部总价栏 */
+    function _renderCartTotalBar(entries) {
+        if (!STATE.ui.cartList) return;
+        let bar = STATE.ui.cartList.parentElement?.querySelector(".mwi-mm-cart-total-bar");
+        const shouldShow = STATE.priceEnabled && STATE.cartTotalEnabled && _marketPrice.ready && entries.length > 0;
+        if (!shouldShow) {
+            if (bar) bar.style.display = "none";
+            return;
+        }
+        let totalCost = 0;
+        let unpricedCount = 0;
+        for (const row of entries) {
+            const qty = Math.ceil(row.quantity || 0);
+            if (qty <= 0) continue;
+            const bareId = normalizeCartItemId(row.itemId);
+            if (isCoinItem(bareId)) continue;
+            const price = _marketPrice.getPrice(bareId);
+            if (price > 0) {
+                totalCost += price * qty;
+            } else {
+                unpricedCount++;
+            }
+        }
+        if (totalCost <= 0 && unpricedCount === 0) {
+            if (bar) bar.style.display = "none";
+            return;
+        }
+        if (!bar) {
+            bar = document.createElement("div");
+            bar.className = "mwi-mm-cart-total-bar";
+            // 插入到 cart-list 之后（resize-handle 之前）
+            const resizeHandle = STATE.ui.cartList.parentElement?.querySelector(".mwi-mm-resize-handle");
+            if (resizeHandle) resizeHandle.before(bar);
+            else STATE.ui.cartList.after(bar);
+        }
+        bar.style.display = "flex";
+        let html = `<span class="mwi-mm-total-label">${t("price_total_label")}</span>`;
+        html += `<span class="mwi-mm-total-value">${formatGold(totalCost)}</span>`;
+        if (unpricedCount > 0) {
+            html += `<span class="mwi-mm-total-unpriced">(${t("price_unpriced", unpricedCount)})</span>`;
+        }
+        bar.innerHTML = html;
     }
 
     // ── 刷新逻辑 ──────────────────────────────────────────────────
@@ -5608,6 +5822,12 @@
 .mwi-mm-nav-items{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.12) transparent}.mwi-mm-nav-items::-webkit-scrollbar{height:4px}.mwi-mm-nav-items::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}.mwi-mm-nav-item{flex-shrink:0;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);cursor:pointer;transition:all .2s}.mwi-mm-nav-item:hover{border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.04)}.mwi-mm-nav-item.is-current{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.08);box-shadow:0 0 0 1px rgba(245,158,11,.15)}.mwi-mm-nav-item-icon{width:24px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.mwi-mm-nav-item-icon svg{width:24px;height:24px}.mwi-mm-nav-item-info{min-width:0}.mwi-mm-nav-item-name{font-size:11px;font-weight:500;color:#e0e4f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px}.mwi-mm-nav-item-qty{font-size:9px;color:#f8c86b;font-weight:600}.mwi-mm-nav-item.is-current .mwi-mm-nav-item-name{color:#fff}.mwi-mm-nav-item.is-current .mwi-mm-nav-item-qty{color:#fcd34d}
 /* v1.4.1: 导航栏内联购齐横幅 */
 .mwi-mm-nav-banner{padding:0;overflow:hidden;transition:opacity .3s,transform .3s;animation:mwi-mm-banner-in .35s ease-out}.mwi-mm-nav-banner-inner{display:flex;align-items:center;gap:8px;padding:8px 10px;background:linear-gradient(90deg,rgba(52,211,153,.1),rgba(52,211,153,.02));border-bottom:1px solid rgba(52,211,153,.2);border-radius:8px 8px 0 0;flex-wrap:wrap}.mwi-mm-nav-banner-alldone{justify-content:center;background:linear-gradient(135deg,rgba(52,211,153,.1),rgba(34,211,238,.06));padding:12px 10px}.mwi-mm-nav-banner-icon{font-size:14px;flex-shrink:0}.mwi-mm-nav-banner-done{font-size:12px;color:#34d399;font-weight:600}.mwi-mm-nav-banner-sep{color:rgba(255,255,255,.15);font-size:10px}.mwi-mm-nav-banner-next-label{font-size:11px;color:#8a9aaa}.mwi-mm-nav-banner-text{font-size:14px;font-weight:700;color:#34d399}.mwi-mm-nav-next-btn{margin-left:auto;flex-shrink:0;padding:5px 14px;border-radius:6px;border:1px solid rgba(245,158,11,.35);background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(245,158,11,.08));color:#f59e0b;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:4px}.mwi-mm-nav-next-btn:hover{background:linear-gradient(135deg,rgba(245,158,11,.28),rgba(245,158,11,.15));border-color:rgba(245,158,11,.5);color:#fcd34d}@keyframes mwi-mm-banner-in{from{opacity:0;transform:translateY(-8px);max-height:0}to{opacity:1;transform:translateY(0);max-height:60px}}
+/* v1.5.0: 设置分组标题 */
+.mwi-mm-settings-group-label{display:block;font-size:11px;font-weight:700;color:rgba(147,197,253,.85);letter-spacing:1px;padding:10px 4px 6px;margin-top:8px;border-top:1px solid rgba(255,255,255,.08);line-height:1.5;overflow:visible;position:relative;z-index:1}.mwi-mm-settings-scroll .mwi-mm-settings-group-label:first-child{border-top:none;margin-top:0;padding-top:4px}
+/* v1.5.0: 购物车价格信息 */
+.mwi-mm-price-info{margin-left:auto;font-size:10px;color:rgba(248,200,107,.55);font-weight:500;white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}.mwi-mm-price-loading{color:rgba(255,255,255,.3);font-style:italic}.mwi-mm-price-none{color:rgba(255,255,255,.2)}
+/* v1.5.0: 购物车总价栏 */
+.mwi-mm-cart-total-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid #2e323d;background:rgba(255,255,255,.02);flex-shrink:0}.mwi-mm-total-label{font-size:11px;color:#8a9aaa;font-weight:500}.mwi-mm-total-value{font-size:14px;font-weight:700;color:#f8c86b;font-variant-numeric:tabular-nums}.mwi-mm-total-unpriced{font-size:10px;color:rgba(255,255,255,.25);margin-left:auto}
 /* v1.3.5: 制作计划独立侧面板 */
 #mwi-mm-plans-panel{position:fixed;z-index:2147482200;width:260px;max-height:70vh;background:#1b1d24;color:#e4e6ee;border:1px solid #2a2d37;border-radius:12px;box-shadow:0 18px 36px rgba(0,0,0,.56);overflow:hidden;display:none;flex-direction:column;font-family:"Microsoft YaHei","PingFang SC",sans-serif;font-size:12px}
 .mwi-mm-plans-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #2e323d;background:#20232d;flex-shrink:0}
