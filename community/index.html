@@ -13,6 +13,7 @@
     <div class="community-col community-left">
       <h1 id="title-feedback">💬 社区反馈</h1>
       <p class="subtitle" id="subtitle-feedback">分享你的想法，帮助改进插件</p>
+      <div class="notice-bar" id="noticeFinal">ℹ️ v1.5.0 为最终功能更新，后续仅修复严重 Bug，暂不考虑新增功能。感谢大家的支持！</div>
 
       <!-- 提交表单 -->
       <div class="card">
@@ -23,8 +24,8 @@
             <div class="hint" id="charHint">最多 2000 字</div>
           </div>
           <div class="form-group">
-            <label id="labelNick">昵称（选填）</label>
-            <input type="text" id="nickname" maxlength="50" placeholder="你的游戏昵称或称呼">
+            <label id="labelNick">昵称 *</label>
+            <input type="text" id="nickname" maxlength="50" placeholder="你的游戏昵称或称呼" required>
           </div>
           <button type="submit" class="btn" id="submitBtn">提交建议</button>
         </form>
