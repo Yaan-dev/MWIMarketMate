@@ -14,7 +14,7 @@
     document.getElementById("labelText").textContent = "Your Suggestion *";
     document.getElementById("text").placeholder = "Describe the feature or improvement you'd like...";
     document.getElementById("charHint").textContent = "Max 2000 characters";
-    document.getElementById("labelNick").textContent = "Nickname (optional)";
+    document.getElementById("labelNick").textContent = "Nickname *";
     document.getElementById("nickname").placeholder = "Your in-game name or alias";
     document.getElementById("submitBtn").textContent = "Submit Suggestion";
     document.getElementById("recentTitle").textContent = "\ud83d\udccb Recent Feedback";
@@ -24,6 +24,7 @@
     document.getElementById("labelWechat").textContent = "WeChat Pay";
     document.getElementById("rankingTitle").textContent = "\ud83c\udfc6 Donor Ranking";
     document.getElementById("loadingDonors").textContent = "Loading...";
+    document.getElementById("noticeFinal").textContent = "\u2139\ufe0f v1.5.0 is the final feature update. Only critical bugs will be fixed going forward. Thank you for your support!";
     document.getElementById("backText").textContent = "Back to Home";
     document.title = "Community \u2014 MWI Market Mate";
   }
@@ -59,8 +60,8 @@
       if (data.ok) {
         msgEl.className = "msg success";
         msgEl.textContent = lang === "en"
-          ? "\u2705 Thank you! Your suggestion has been submitted."
-          : "\u2705 \u611f\u8c22\uff01\u4f60\u7684\u5efa\u8bae\u5df2\u63d0\u4ea4\u3002";
+          ? "\u2705 Thank you! Your suggestion has been submitted and will appear after review."
+          : "\u2705 \u611f\u8c22\uff01\u4f60\u7684\u5efa\u8bae\u5df2\u63d0\u4ea4\uff0c\u5ba1\u6838\u901a\u8fc7\u540e\u5c06\u516c\u5f00\u663e\u793a\u3002";
         form.reset();
         loadFeedback(); // 刷新列表
       } else {
