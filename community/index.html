@@ -4,16 +4,468 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>社区中心 — MWI Market Mate</title>
-  <link rel="stylesheet" href="../css/style.css">
+  <meta name="description" content="MWI 市场伴侣社区中心：功能反馈、Bug 报告、打赏支持">
+  <style>
+    /* ─── 设计 Token（和 landing / 插件本体主题对齐） ───────── */
+    :root {
+      --bg:              #08080e;
+      --surface-1:       #0f0f17;
+      --surface-2:       #14141d;
+      --surface-3:       #1a1a24;
+      --border-soft:     rgba(255, 255, 255, .06);
+      --border-medium:   rgba(255, 255, 255, .12);
+      --border-strong:   rgba(255, 255, 255, .18);
+      --border-gold:     rgba(240, 180, 41, .45);
+      --border-gold-dim: rgba(240, 180, 41, .18);
+
+      --text-primary:    #fff;
+      --text-body:       rgba(255, 255, 255, .88);
+      --text-weak:       rgba(255, 255, 255, .62);
+      --text-faint:      rgba(255, 255, 255, .4);
+
+      --accent-gold:        #f0b429;
+      --accent-gold-bright: #fcd34d;
+      --accent-gold-glow:   rgba(240, 180, 41, .35);
+
+      --danger: #ef4444;
+      --success: #22c55e;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter",
+                   "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+      --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, "Cascadia Code",
+                   "Consolas", "Microsoft YaHei", monospace;
+
+      --ease-out: cubic-bezier(.25, .8, .3, 1);
+    }
+
+    /* ─── 基础重置 ───────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-body);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    h1, h2, h3, h4, p, ul, form { margin: 0; padding: 0; }
+    svg { display: inline-block; flex-shrink: 0; }
+    img { max-width: 100%; height: auto; display: block; }
+    button { font-family: inherit; }
+
+    /* ─── 背景视觉层（同 landing） ───────────────────── */
+    .bg {
+      position: fixed; inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .bg-glow {
+      position: absolute;
+      left: 50%; top: 30%;
+      width: 80vw; height: 80vw;
+      max-width: 1200px; max-height: 1200px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle at center,
+                   rgba(240, 180, 41, .10) 0%,
+                   rgba(240, 180, 41, .04) 25%,
+                   rgba(240, 180, 41, 0) 60%);
+      filter: blur(40px);
+    }
+    .bg-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(to right,  rgba(255, 255, 255, .025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, .025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+    }
+    .bg-stars, .bg-stars::after, .bg-stars::before {
+      content: ""; position: absolute;
+      width: 1px; height: 1px;
+      background: transparent;
+      border-radius: 50%;
+    }
+    .bg-stars {
+      top: 0; left: 0;
+      box-shadow:
+        5vw 8vh  1px rgba(255,255,255,.35), 12vw 22vh 1px rgba(255,255,255,.3),
+        22vw 5vh 1px rgba(255,255,255,.4),  30vw 15vh 1px rgba(255,255,255,.3),
+        38vw 28vh 1px rgba(255,255,255,.35), 46vw 10vh 1px rgba(255,255,255,.3),
+        55vw 20vh 1px rgba(255,255,255,.35), 63vw 6vh  1px rgba(255,255,255,.4),
+        71vw 18vh 1px rgba(255,255,255,.3),  80vw 27vh 1px rgba(255,255,255,.35),
+        88vw 12vh 1px rgba(255,255,255,.3),  95vw 24vh 1px rgba(255,255,255,.4),
+        3vw 40vh  1px rgba(255,255,255,.35), 14vw 48vh 1px rgba(255,255,255,.3),
+        24vw 58vh 1px rgba(255,255,255,.4),  33vw 42vh 1px rgba(255,255,255,.35),
+        42vw 65vh 1px rgba(255,255,255,.3),  51vw 50vh 1px rgba(255,255,255,.35),
+        60vw 62vh 1px rgba(255,255,255,.3),  68vw 45vh 1px rgba(255,255,255,.4),
+        76vw 55vh 1px rgba(255,255,255,.3),  85vw 68vh 1px rgba(255,255,255,.35),
+        92vw 50vh 1px rgba(255,255,255,.3),  7vw 72vh  1px rgba(255,255,255,.4),
+        18vw 85vh 1px rgba(255,255,255,.3),  28vw 78vh 1px rgba(255,255,255,.35),
+        37vw 90vh 1px rgba(255,255,255,.3),  47vw 80vh 1px rgba(255,255,255,.35),
+        58vw 93vh 1px rgba(255,255,255,.4),  67vw 76vh 1px rgba(255,255,255,.3),
+        78vw 88vh 1px rgba(255,255,255,.35), 87vw 82vh 1px rgba(255,255,255,.3),
+        96vw 90vh 1px rgba(255,255,255,.4);
+    }
+    .bg-stars::after {
+      box-shadow:
+        18vw 12vh 2px rgba(240,180,41,.7),
+        72vw 30vh 2px rgba(240,180,41,.65),
+        25vw 70vh 2px rgba(240,180,41,.7),
+        88vw 62vh 2px rgba(240,180,41,.6),
+        45vw 8vh  2px rgba(240,180,41,.55),
+        55vw 85vh 2px rgba(240,180,41,.65);
+      animation: twinkle 4s ease-in-out infinite;
+    }
+    .bg-stars::before {
+      box-shadow:
+        35vw 35vh 2px rgba(240,180,41,.6),
+        78vw 18vh 2px rgba(240,180,41,.55),
+        15vw 55vh 2px rgba(240,180,41,.7),
+        62vw 72vh 2px rgba(240,180,41,.6);
+      animation: twinkle 5s ease-in-out infinite .8s;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: .7; }
+      50%      { opacity: 1; }
+    }
+
+    /* ─── 布局容器：双栏 grid ───────────────────── */
+    .community-wrapper {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 56px 24px 32px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+    .community-col {
+      min-width: 0;
+      animation: fadeUp .7s var(--ease-out) both;
+    }
+    .community-left  { animation-delay: .05s; }
+    .community-right { animation-delay: .15s; }
+
+    @media (max-width: 900px) {
+      .community-wrapper {
+        grid-template-columns: 1fr;
+        gap: 48px;
+        padding: 40px 20px 24px;
+      }
+    }
+
+    /* ─── 栏标题 ───────────────────── */
+    .community-col h1 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: clamp(26px, 4vw, 34px);
+      font-weight: 800;
+      letter-spacing: -.015em;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .community-col h1 svg {
+      width: 28px; height: 28px;
+      color: var(--accent-gold);
+    }
+    .community-col .subtitle {
+      color: var(--text-weak);
+      font-size: 14px;
+      margin-bottom: 24px;
+      font-family: var(--font-mono);
+      letter-spacing: .1px;
+    }
+
+    /* ─── Notice Bar（公告条） ───────────────────── */
+    .notice-bar {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      background: rgba(240, 180, 41, .06);
+      border: 1px solid var(--border-gold-dim);
+      border-left: 3px solid var(--accent-gold);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text-body);
+      line-height: 1.5;
+    }
+    .notice-bar svg {
+      width: 16px; height: 16px;
+      color: var(--accent-gold);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* ─── Card（统一卡片） ───────────────────── */
+    .card {
+      padding: 24px;
+      background: var(--surface-1);
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      margin-bottom: 24px;
+      transition: border-color .3s var(--ease-out);
+    }
+    .card:hover { border-color: var(--border-medium); }
+
+    /* ─── Section Title（列表小标题） ───────────────────── */
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 28px 0 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-soft);
+      letter-spacing: -.005em;
+    }
+    .section-title svg {
+      width: 18px; height: 18px;
+      color: var(--accent-gold);
+    }
+
+    /* ─── 表单 ───────────────────── */
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-weak);
+      margin-bottom: 6px;
+      letter-spacing: .2px;
+    }
+    .form-group textarea,
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 11px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--text-primary);
+      background: var(--surface-2);
+      border: 1px solid var(--border-medium);
+      border-radius: 8px;
+      outline: none;
+      transition: border-color .2s var(--ease-out), background .2s var(--ease-out);
+      resize: vertical;
+    }
+    .form-group textarea { min-height: 110px; }
+    .form-group textarea::placeholder,
+    .form-group input[type="text"]::placeholder {
+      color: var(--text-faint);
+    }
+    .form-group textarea:hover,
+    .form-group input[type="text"]:hover {
+      border-color: var(--border-strong);
+    }
+    .form-group textarea:focus,
+    .form-group input[type="text"]:focus {
+      border-color: var(--accent-gold);
+      background: var(--surface-3);
+      box-shadow: 0 0 0 3px rgba(240, 180, 41, .1);
+    }
+    .hint {
+      font-size: 11.5px;
+      color: var(--text-faint);
+      margin-top: 5px;
+      font-family: var(--font-mono);
+    }
+
+    /* ─── 按钮（提交） ───────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all .2s var(--ease-out);
+      white-space: nowrap;
+      background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-bright) 100%);
+      color: #1a1a1a;
+      box-shadow: 0 4px 14px rgba(240, 180, 41, .3);
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(240, 180, 41, .45), 0 0 0 3px rgba(240, 180, 41, .12);
+    }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ─── 表单反馈消息 ───────────────────── */
+    .msg {
+      margin-top: 12px;
+      font-size: 13px;
+      min-height: 1em;
+    }
+    .msg.success, .msg[data-type="success"] {
+      color: var(--success);
+    }
+    .msg.error, .msg[data-type="error"] {
+      color: var(--danger);
+    }
+
+    /* ─── 二维码卡片 ───────────────────── */
+    .qr-card {
+      padding: 16px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, .4), 0 0 0 1px var(--border-gold-dim);
+      transition: all .3s var(--ease-out);
+    }
+    .qr-card:hover {
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .5), 0 0 0 1px var(--border-gold);
+      transform: translateY(-2px);
+    }
+    .qr-card img { border-radius: 6px; }
+    .qr-label {
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a1a;
+      letter-spacing: .2px;
+    }
+
+    /* ─── 反馈列表 / 排行列表容器（给 JS 填充留 hook） ───────── */
+    #feedbackList, #rankingContent {
+      min-height: 60px;
+    }
+    /* 单条反馈项（如果 JS 用了 .feedback-item / .ranking-item 就生效） */
+    .feedback-item, .ranking-item {
+      padding: 14px 16px;
+      background: var(--surface-1);
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      transition: border-color .2s var(--ease-out), background .2s var(--ease-out);
+    }
+    .feedback-item:hover, .ranking-item:hover {
+      border-color: var(--border-gold-dim);
+      background: var(--surface-2);
+    }
+
+    /* ─── Loading ───────────────────── */
+    .loading {
+      text-align: center;
+      padding: 24px;
+      color: var(--text-faint);
+      font-size: 13px;
+      font-family: var(--font-mono);
+    }
+    .loading::before {
+      content: "";
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid var(--border-medium);
+      border-top-color: var(--accent-gold);
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: -2px;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Footer ───────────────────── */
+    .footer {
+      max-width: 1120px;
+      margin: 40px auto 0;
+      padding: 24px;
+      text-align: center;
+      border-top: 1px solid var(--border-soft);
+      color: var(--text-faint);
+      font-size: 13px;
+    }
+    .footer a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-weak);
+      padding: 8px 14px;
+      border-radius: 8px;
+      transition: all .2s var(--ease-out);
+    }
+    .footer a:hover {
+      color: var(--accent-gold);
+      background: rgba(240, 180, 41, .06);
+    }
+    .footer a svg {
+      width: 14px; height: 14px;
+      transition: transform .2s var(--ease-out);
+    }
+    .footer a:hover svg { transform: translateX(-2px); }
+
+    /* ─── 入场动画 ───────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 640px) {
+      .community-wrapper { padding: 32px 16px 20px; }
+      .card              { padding: 20px; }
+      .community-col h1  { font-size: 26px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
 </head>
+
 <body>
+  <!-- 背景视觉层（和 landing page 同款） -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg-glow"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-stars"></div>
+  </div>
+
   <div class="community-wrapper">
 
     <!-- ===== 左栏：建议区 ===== -->
     <div class="community-col community-left">
-      <h1 id="title-feedback">💬 社区反馈</h1>
+      <h1 id="title-feedback">
+        <!-- message-circle icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>
+        </svg>
+        <span>社区反馈</span>
+      </h1>
       <p class="subtitle" id="subtitle-feedback">分享你的想法，帮助改进插件</p>
-      <div class="notice-bar" id="noticeFinal">ℹ️ v1.5.0 为最终功能更新，后续仅修复 Bug，暂不考虑新增功能。</div>
+
+      <div class="notice-bar" id="noticeFinal">
+        <!-- info icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 16v-4"/>
+          <path d="M12 8h.01"/>
+        </svg>
+        <span>v1.5.0 为最终功能更新，后续仅修复 Bug，暂不考虑新增功能。</span>
+      </div>
 
       <!-- 提交表单 -->
       <div class="card">
@@ -33,7 +485,18 @@
       </div>
 
       <!-- 建议列表 -->
-      <div class="section-title" id="recentTitle">📋 最近反馈</div>
+      <div class="section-title" id="recentTitle">
+        <!-- clipboard-list icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+          <path d="M12 11h4"/>
+          <path d="M12 16h4"/>
+          <path d="M8 11h.01"/>
+          <path d="M8 16h.01"/>
+        </svg>
+        <span>最近反馈</span>
+      </div>
       <div id="feedbackList">
         <div class="loading" id="loadingFeedback">加载中...</div>
       </div>
@@ -41,7 +504,13 @@
 
     <!-- ===== 右栏：打赏区 ===== -->
     <div class="community-col community-right">
-      <h1 id="title-donate">❤ 打赏作者</h1>
+      <h1 id="title-donate">
+        <!-- heart icon（实心红色） -->
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#ef4444">
+          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/>
+        </svg>
+        <span>打赏作者</span>
+      </h1>
       <p class="subtitle" id="subtitle-donate">感谢你的支持，这是我持续开发的动力！</p>
 
       <!-- 收款二维码 -->
@@ -53,7 +522,18 @@
       </div>
 
       <!-- 打赏排行 -->
-      <div class="section-title" id="rankingTitle">🏆 打赏排行</div>
+      <div class="section-title" id="rankingTitle">
+        <!-- trophy icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+          <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+          <path d="M4 22h16"/>
+          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+          <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+          <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+        </svg>
+        <span>打赏排行</span>
+      </div>
       <div id="rankingContent">
         <div class="loading" id="loadingDonors">加载中...</div>
       </div>
@@ -63,7 +543,14 @@
 
   <!-- 返回首页 -->
   <div class="footer" style="margin-top:40px;">
-    <a href="../">← <span id="backText">返回首页</span></a>
+    <a href="../">
+      <!-- arrow-left icon -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m12 19-7-7 7-7"/>
+        <path d="M19 12H5"/>
+      </svg>
+      <span id="backText">返回首页</span>
+    </a>
   </div>
 
   <script src="../js/community.js"></script>
