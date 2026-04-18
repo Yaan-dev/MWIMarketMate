@@ -4,70 +4,612 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MWI Market Mate — 市场伴侣</title>
-  <link rel="stylesheet" href="css/style.css">
+  <meta name="description" content="Milky Way Idle 制作辅助插件：智能购物清单、缺料计算、市场联动、升级链展示。">
+  <style>
+    /* ─── 设计 Token（和插件本体主题对齐） ───────────────────── */
+    :root {
+      --bg:              #08080e;
+      --surface-1:       #0f0f17;
+      --surface-2:       #14141d;
+      --surface-3:       #1a1a24;
+      --border-soft:     rgba(255, 255, 255, .06);
+      --border-medium:   rgba(255, 255, 255, .12);
+      --border-gold:     rgba(240, 180, 41, .45);
+      --border-gold-dim: rgba(240, 180, 41, .18);
+
+      --text-primary:    #fff;
+      --text-body:       rgba(255, 255, 255, .88);
+      --text-weak:       rgba(255, 255, 255, .62);
+      --text-faint:      rgba(255, 255, 255, .4);
+
+      --accent-gold:        #f0b429;
+      --accent-gold-bright: #fcd34d;
+      --accent-gold-glow:   rgba(240, 180, 41, .35);
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter",
+                   "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+      --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, "Cascadia Code",
+                   "Consolas", "Microsoft YaHei", monospace;
+
+      --ease-out: cubic-bezier(.25, .8, .3, 1);
+    }
+
+    /* ─── 基础重置 ───────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-body);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    h1, h2, h3, h4, p, ul { margin: 0; padding: 0; }
+    ul { list-style: none; }
+
+    /* ─── SVG 通用 ───────────────────── */
+    svg { display: inline-block; flex-shrink: 0; }
+
+    /* ─── 背景视觉层 ───────────────────── */
+    .bg {
+      position: fixed; inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .bg-glow {
+      position: absolute;
+      left: 50%; top: 30%;
+      width: 80vw; height: 80vw;
+      max-width: 1200px; max-height: 1200px;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle at center,
+                   rgba(240, 180, 41, .12) 0%,
+                   rgba(240, 180, 41, .05) 25%,
+                   rgba(240, 180, 41, 0) 60%);
+      filter: blur(40px);
+    }
+    .bg-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(to right,  rgba(255, 255, 255, .025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, .025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+    }
+    .bg-stars, .bg-stars::after, .bg-stars::before {
+      content: ""; position: absolute;
+      width: 1px; height: 1px;
+      background: transparent;
+      border-radius: 50%;
+    }
+    .bg-stars {
+      top: 0; left: 0;
+      box-shadow:
+        5vw 8vh  1px rgba(255,255,255,.35), 12vw 22vh 1px rgba(255,255,255,.3),
+        22vw 5vh 1px rgba(255,255,255,.4),  30vw 15vh 1px rgba(255,255,255,.3),
+        38vw 28vh 1px rgba(255,255,255,.35), 46vw 10vh 1px rgba(255,255,255,.3),
+        55vw 20vh 1px rgba(255,255,255,.35), 63vw 6vh  1px rgba(255,255,255,.4),
+        71vw 18vh 1px rgba(255,255,255,.3),  80vw 27vh 1px rgba(255,255,255,.35),
+        88vw 12vh 1px rgba(255,255,255,.3),  95vw 24vh 1px rgba(255,255,255,.4),
+        3vw 40vh  1px rgba(255,255,255,.35), 14vw 48vh 1px rgba(255,255,255,.3),
+        24vw 58vh 1px rgba(255,255,255,.4),  33vw 42vh 1px rgba(255,255,255,.35),
+        42vw 65vh 1px rgba(255,255,255,.3),  51vw 50vh 1px rgba(255,255,255,.35),
+        60vw 62vh 1px rgba(255,255,255,.3),  68vw 45vh 1px rgba(255,255,255,.4),
+        76vw 55vh 1px rgba(255,255,255,.3),  85vw 68vh 1px rgba(255,255,255,.35),
+        92vw 50vh 1px rgba(255,255,255,.3),  7vw 72vh  1px rgba(255,255,255,.4),
+        18vw 85vh 1px rgba(255,255,255,.3),  28vw 78vh 1px rgba(255,255,255,.35),
+        37vw 90vh 1px rgba(255,255,255,.3),  47vw 80vh 1px rgba(255,255,255,.35),
+        58vw 93vh 1px rgba(255,255,255,.4),  67vw 76vh 1px rgba(255,255,255,.3),
+        78vw 88vh 1px rgba(255,255,255,.35), 87vw 82vh 1px rgba(255,255,255,.3),
+        96vw 90vh 1px rgba(255,255,255,.4);
+    }
+    .bg-stars::after {
+      box-shadow:
+        18vw 12vh 2px rgba(240,180,41,.7),
+        72vw 30vh 2px rgba(240,180,41,.65),
+        25vw 70vh 2px rgba(240,180,41,.7),
+        88vw 62vh 2px rgba(240,180,41,.6),
+        45vw 8vh  2px rgba(240,180,41,.55),
+        55vw 85vh 2px rgba(240,180,41,.65);
+      animation: twinkle 4s ease-in-out infinite;
+    }
+    .bg-stars::before {
+      box-shadow:
+        35vw 35vh 2px rgba(240,180,41,.6),
+        78vw 18vh 2px rgba(240,180,41,.55),
+        15vw 55vh 2px rgba(240,180,41,.7),
+        62vw 72vh 2px rgba(240,180,41,.6);
+      animation: twinkle 5s ease-in-out infinite .8s;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: .7; }
+      50%      { opacity: 1; }
+    }
+
+    /* ─── 布局容器 ───────────────────── */
+    .landing-wrapper {
+      width: 100%;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 72px 24px 48px;
+    }
+
+    /* ─── Hero ───────────────────── */
+    .hero {
+      text-align: center;
+      margin-bottom: 96px;
+      animation: fadeUp .8s var(--ease-out) both;
+    }
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px 5px 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .4px;
+      color: var(--accent-gold);
+      background: rgba(240, 180, 41, .1);
+      border: 1px solid var(--border-gold-dim);
+      border-radius: 100px;
+      margin-bottom: 28px;
+    }
+    .version-badge::before {
+      content: "";
+      width: 6px; height: 6px;
+      background: var(--accent-gold);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent-gold);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: .6; transform: scale(.85); }
+    }
+
+    h1.hero-title {
+      font-size: clamp(40px, 7vw, 64px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -.02em;
+      margin-bottom: 16px;
+      background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,.75) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-accent {
+      background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-bright) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: clamp(15px, 2vw, 18px);
+      color: var(--text-weak);
+      margin-bottom: 40px;
+      font-family: var(--font-mono);
+      letter-spacing: .2px;
+    }
+
+    /* ─── CTA 按钮 ───────────────────── */
+    .hero-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 13px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all .2s var(--ease-out);
+      white-space: nowrap;
+    }
+    .btn svg { width: 16px; height: 16px; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-bright) 100%);
+      color: #1a1a1a;
+      box-shadow: 0 4px 14px rgba(240, 180, 41, .35);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 8px 24px rgba(240, 180, 41, .5),
+        0 0 0 4px rgba(240, 180, 41, .15);
+    }
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text-body);
+      border-color: var(--border-medium);
+    }
+    .btn-secondary:hover {
+      background: var(--surface-3);
+      border-color: var(--border-gold);
+      color: var(--accent-gold);
+      transform: translateY(-2px);
+    }
+
+    /* ─── Section 通用 ───────────────────── */
+    section { margin-bottom: 80px; }
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      color: var(--accent-gold);
+      text-transform: uppercase;
+    }
+    .section-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: clamp(22px, 3vw, 28px);
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -.01em;
+    }
+    .section-title svg {
+      width: 22px; height: 22px;
+      color: var(--accent-gold);
+    }
+
+    /* ─── 功能卡片 ───────────────────── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      position: relative;
+      padding: 28px 24px;
+      background: var(--surface-1);
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      transition: all .3s var(--ease-out);
+      overflow: hidden;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      background: var(--surface-2);
+      border-color: var(--border-gold-dim);
+      box-shadow:
+        0 12px 32px rgba(0, 0, 0, .4),
+        0 0 0 1px var(--border-gold-dim);
+    }
+    .feature-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, rgba(240, 180, 41, .15), rgba(240, 180, 41, .05));
+      border: 1px solid var(--border-gold-dim);
+      border-radius: 10px;
+      margin-bottom: 16px;
+      color: var(--accent-gold);
+      transition: all .3s var(--ease-out);
+    }
+    .feature-icon svg { width: 22px; height: 22px; }
+    .feature-card:hover .feature-icon {
+      background: linear-gradient(135deg, rgba(240, 180, 41, .25), rgba(240, 180, 41, .1));
+      border-color: var(--border-gold);
+      transform: scale(1.05);
+    }
+    .feature-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      letter-spacing: -.005em;
+    }
+    .feature-desc {
+      font-size: 13.5px;
+      color: var(--text-weak);
+      line-height: 1.55;
+    }
+
+    /* ─── Changelog 时间线 ───────────────────── */
+    .changelog-list {
+      position: relative;
+      padding-left: 28px;
+    }
+    .changelog-list::before {
+      content: "";
+      position: absolute;
+      left: 5px; top: 6px; bottom: 6px;
+      width: 1px;
+      background: linear-gradient(to bottom,
+        var(--border-gold-dim),
+        var(--border-soft) 50%,
+        transparent);
+    }
+    .changelog-list li {
+      position: relative;
+      padding: 10px 0;
+      color: var(--text-body);
+      font-size: 14.5px;
+      line-height: 1.6;
+      transition: color .2s var(--ease-out);
+    }
+    .changelog-list li::before {
+      content: "";
+      position: absolute;
+      left: -28px; top: 19px;
+      width: 11px; height: 11px;
+      background: var(--accent-gold);
+      border: 2px solid var(--bg);
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px var(--accent-gold), 0 0 8px rgba(240, 180, 41, .4);
+      transition: box-shadow .2s var(--ease-out);
+    }
+    .changelog-list li:hover { color: var(--text-primary); }
+    .changelog-list li:hover::before { box-shadow: 0 0 0 1px var(--accent-gold), 0 0 12px rgba(240, 180, 41, .7); }
+
+    /* ─── Footer ───────────────────── */
+    .footer {
+      text-align: center;
+      padding: 40px 0 24px;
+      color: var(--text-faint);
+      font-size: 13px;
+      border-top: 1px solid var(--border-soft);
+    }
+    .footer p {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .footer .heart {
+      color: #ef4444;
+      display: inline-flex;
+    }
+    .footer .heart svg { width: 13px; height: 13px; }
+
+    /* ─── 入场动画 ───────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .feature-card              { animation: fadeUp .8s var(--ease-out) both; }
+    .feature-card:nth-child(1) { animation-delay: .08s; }
+    .feature-card:nth-child(2) { animation-delay: .16s; }
+    .feature-card:nth-child(3) { animation-delay: .24s; }
+    .feature-card:nth-child(4) { animation-delay: .32s; }
+    .feature-card:nth-child(5) { animation-delay: .4s; }
+    .feature-card:nth-child(6) { animation-delay: .48s; }
+    .changelog-list li              { animation: fadeUp .6s var(--ease-out) both; }
+    .changelog-list li:nth-child(1) { animation-delay: .1s; }
+    .changelog-list li:nth-child(2) { animation-delay: .2s; }
+    .changelog-list li:nth-child(3) { animation-delay: .3s; }
+    .changelog-list li:nth-child(4) { animation-delay: .4s; }
+
+    /* ─── 响应式 ───────────────────── */
+    @media (max-width: 640px) {
+      .landing-wrapper { padding: 48px 20px 32px; }
+      .hero            { margin-bottom: 64px; }
+      .hero-buttons    { flex-direction: column; }
+      .hero-buttons .btn { justify-content: center; }
+      .feature-grid    { grid-template-columns: 1fr; }
+      section          { margin-bottom: 56px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div class="landing-wrapper">
-    <h1>MWI 市场伴侣</h1>
-    <div class="landing-subtitle">Market Mate — Milky Way Idle 制作辅助插件</div>
-    <div class="landing-version">当前版本 v1.5.0</div>
+  <!-- 背景视觉层 -->
+  <div class="bg" aria-hidden="true">
+    <div class="bg-glow"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-stars"></div>
+  </div>
 
-    <!-- 主按钮 -->
-    <div class="landing-buttons">
-      <a href="https://greasyfork.org/zh-CN/scripts/567386" target="_blank" class="btn">📦 安装插件</a>
-      <a href="guide/" class="btn">📖 使用说明</a>
-      <a href="community/" class="btn btn-donate">💬 社区中心</a>
-    </div>
+  <main class="landing-wrapper">
 
-    <!-- 功能亮点 -->
-    <div class="section-title" style="text-align:left;">✨ 核心功能</div>
-    <div class="feature-grid">
-      <div class="feature-card">
-        <div class="feature-icon">🛒</div>
-        <div class="feature-title">智能购物清单</div>
-        <div class="feature-desc">自动计算缺料数量，一键生成采购清单</div>
+    <!-- Hero -->
+    <section class="hero">
+      <span class="version-badge">当前版本 v1.6.0</span>
+      <h1 class="hero-title">MWI <span class="hero-accent">市场伴侣</span></h1>
+      <p class="hero-subtitle">Market Mate — Milky Way Idle 制作辅助插件</p>
+      <div class="hero-buttons">
+        <!-- 安装插件 · package icon -->
+        <a href="https://greasyfork.org/zh-CN/scripts/567386" target="_blank" rel="noopener" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16.5 9.4 7.5 4.21"/>
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" x2="12" y1="22.08" y2="12"/>
+          </svg>
+          安装插件
+        </a>
+        <!-- 使用说明 · book-open icon -->
+        <a href="guide/" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          使用说明
+        </a>
+        <!-- 社区中心 · message-circle icon -->
+        <a href="community/" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>
+          </svg>
+          社区中心
+        </a>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">📊</div>
-        <div class="feature-title">Z-score 安全边际</div>
-        <div class="feature-desc">基于概率模型的材料安全量计算</div>
+    </section>
+
+    <!-- 核心功能 -->
+    <section>
+      <div class="section-header">
+        <span class="section-eyebrow">Features</span>
+        <h2 class="section-title">
+          <!-- sparkles icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+            <path d="M20 3v4"/>
+            <path d="M22 5h-4"/>
+            <path d="M4 17v2"/>
+            <path d="M5 18H3"/>
+          </svg>
+          核心功能
+        </h2>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">🍵</div>
-        <div class="feature-title">工匠茶自动计算</div>
-        <div class="feature-desc">自动识别茶水减免，无需手动调整</div>
+      <div class="feature-grid">
+
+        <!-- Card 1 · shopping-cart -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="8" cy="21" r="1"/>
+              <circle cx="19" cy="21" r="1"/>
+              <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">智能购物清单</h3>
+          <p class="feature-desc">自动计算缺料数量，一键生成采购清单</p>
+        </div>
+
+        <!-- Card 2 · bar-chart-3 -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 3v18h18"/>
+              <path d="M7 16V10"/>
+              <path d="M12 16V4"/>
+              <path d="M17 16v-8"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">Z-score 安全边际</h3>
+          <p class="feature-desc">基于概率模型的材料安全量计算</p>
+        </div>
+
+        <!-- Card 3 · coffee/tea -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M17 8h1a4 4 0 1 1 0 8h-1"/>
+              <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
+              <line x1="6" x2="6" y1="2" y2="4"/>
+              <line x1="10" x2="10" y1="2" y2="4"/>
+              <line x1="14" x2="14" y1="2" y2="4"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">工匠茶自动计算</h3>
+          <p class="feature-desc">自动识别茶水减免，无需手动调整</p>
+        </div>
+
+        <!-- Card 4 · link -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">升级链展示</h3>
+          <p class="feature-desc">完整展示升级路径，支持步骤筛选</p>
+        </div>
+
+        <!-- Card 5 · clipboard-list -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <path d="M12 11h4"/>
+              <path d="M12 16h4"/>
+              <path d="M8 11h.01"/>
+              <path d="M8 16h.01"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">任务追踪</h3>
+          <p class="feature-desc">自动追踪制作任务进度与材料需求</p>
+        </div>
+
+        <!-- Card 6 · coins -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="8" cy="8" r="6"/>
+              <path d="M18.09 10.37A6 6 0 1 1 10.34 18"/>
+              <path d="M7 6h1v4"/>
+              <path d="m16.71 13.88.71.71-2.83 2.83"/>
+            </svg>
+          </div>
+          <h3 class="feature-title">实时市场价格</h3>
+          <p class="feature-desc">获取最新市场价格，计算总花费</p>
+        </div>
+
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔗</div>
-        <div class="feature-title">升级链展示</div>
-        <div class="feature-desc">完整展示升级路径，支持步骤筛选</div>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📋</div>
-        <div class="feature-title">任务追踪</div>
-        <div class="feature-desc">自动追踪制作任务进度与材料需求</div>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">💰</div>
-        <div class="feature-title">实时市场价格</div>
-        <div class="feature-desc">获取最新市场价格，计算总花费</div>
-      </div>
-    </div>
+    </section>
 
     <!-- 最近更新 -->
-    <div class="changelog-section">
-      <div class="section-title">📝 最近更新 — v1.5.0</div>
-      <ul>
-        <li>购物清单内显示物品市场实时价格与行小计（数据来源：marketplace.json API）</li>
-        <li>购物清单底部新增预估总花费栏，无市场价格的物品单独标注</li>
-        <li>设置面板按「市场与采购」「制作辅助」「系统」三组归类，附分组标题</li>
-        <li>语言检测改为始终跟随游戏设置，移除手动语言切换按钮</li>
+    <section>
+      <div class="section-header">
+        <span class="section-eyebrow">Changelog</span>
+        <h2 class="section-title">
+          <!-- file-text icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>
+            <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+            <path d="M10 9H8"/>
+            <path d="M16 13H8"/>
+            <path d="M16 17H8"/>
+          </svg>
+          最近更新 — v1.6.0
+        </h2>
+      </div>
+      <ul class="changelog-list">
+        <li>深色主题视觉大更新（接近纯黑底 + 琥珀金主色），全面统一配色语言</li>
+        <li>设置项改为滑动开关，设置面板重排为「显示 / 计算 / 市场与采购 / 界面与同步」四组</li>
+        <li>修复 F12 / 窗口缩放 / 调整尺寸后面板位置不恢复的问题，UI 自适应行为大幅改善</li>
+        <li>FAB 气泡改为金色发光，Toast 字体放大；底层 CSS 变量化重构</li>
       </ul>
-    </div>
+    </section>
 
-    <div class="footer">
-      <p>Made with ❤ by ColaCola</p>
-    </div>
-  </div>
+    <!-- Footer -->
+    <footer class="footer">
+      <p>
+        Made with
+        <span class="heart">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/>
+          </svg>
+        </span>
+        by ColaCola
+      </p>
+    </footer>
+
+  </main>
 </body>
 </html>
