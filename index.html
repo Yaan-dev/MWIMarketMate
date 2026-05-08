@@ -367,6 +367,15 @@
     }
     .changelog-list li:hover { color: var(--text-primary); }
     .changelog-list li:hover::before { box-shadow: 0 0 0 1px var(--accent-gold), 0 0 12px rgba(240, 180, 41, .7); }
+    .changelog-list code {
+      font-family: var(--font-mono);
+      font-size: .9em;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(240, 180, 41, .1);
+      color: var(--accent-gold-bright);
+      border: 1px solid var(--border-gold-dim);
+    }
 
     /* ─── Footer ───────────────────── */
     .footer {
@@ -436,7 +445,7 @@
 
     <!-- Hero -->
     <section class="hero">
-      <span class="version-badge">当前版本 v1.6.1</span>
+      <span class="version-badge">当前版本 v1.7.0</span>
       <h1 class="hero-title">MWI <span class="hero-accent">市场伴侣</span></h1>
       <p class="hero-subtitle">Market Mate — Milky Way Idle 制作辅助插件</p>
       <div class="hero-buttons">
@@ -586,14 +595,14 @@
             <path d="M16 13H8"/>
             <path d="M16 17H8"/>
           </svg>
-          最近更新 — v1.6.1
+          最近更新 — v1.7.0
         </h2>
       </div>
       <ul class="changelog-list">
-        <li>新增「被其他计划锁定」提示：材料行徽章尾部显示 🔒N，悬停查看每个计划锁定明细</li>
-        <li>摘要行新增琥珀色「🔒锁 N 种」汇总标签，一眼看清当前配方有多少种材料被其他计划占用</li>
-        <li>升级链材料行同等处理，锁定语义全面统一</li>
-        <li>徽章加 nowrap 防止长数字异常换行，同时兼顾原有缺料/余量徽章的稳定性</li>
+        <li>新增公共 API <code>window.MWIMM</code>：让其他用户脚本读写购物车、监听变化、跳转市场（完整使用文档在脚本顶部注释）</li>
+        <li>新增「采购下一个」快捷键：购齐当前物品且购物车还有下一项时按下即跳转，单键（Space/Q）与组合键（Ctrl+Shift+N）都支持</li>
+        <li>购齐横幅旁多了快捷键徽章：未设置时点击直达设置面板对应行；横幅消失即徽章消失，不占常驻 UI</li>
+        <li>购物车写入路径拆分，批量 API 写入只触发一次持久化与广播，避免重复 IO</li>
       </ul>
     </section>
 
