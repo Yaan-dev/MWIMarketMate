@@ -7,226 +7,277 @@
 <meta name="description" content="Milky Way Idle 制作缺料计算助手与手动采购辅助。数据直读游戏数据层,购买永远由你亲手完成。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{
-  --ink:#07070d; --panel:#101019; --panel2:#15151f;
-  --line:rgba(232,200,127,.14); --line2:rgba(232,200,127,.28);
-  --gold:#e8c87f; --gold-deep:#b8923f;
-  --text:#f2efe6; --mut:#979282;
-  --red:#ff7488; --blue:#7fb0ff; --green:#8fd9a8;
-  --serif:"Noto Serif SC",serif; --sans:"Noto Sans SC",sans-serif; --mono:"JetBrains Mono",monospace;
+  --bg:#0a0a0c; --bg2:#0d0d10;
+  --hair:rgba(255,255,255,.07); --hair2:rgba(255,255,255,.13);
+  --srf:rgba(255,255,255,.028); --srf2:rgba(255,255,255,.05);
+  --text:#f4f4f5; --mut:rgba(244,244,245,.56); --dim:rgba(244,244,245,.34);
+  --acc:#f4b942; --acc-dim:rgba(244,185,66,.14);
+  --red:#ff6b7e; --blue:#6ca6ff; --green:#5fd39a;
+  --sans:"Geist","Noto Sans SC",-apple-system,sans-serif;
+  --mono:"Geist Mono","Noto Sans SC",monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{background:var(--ink);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
-::selection{background:var(--gold);color:var(--ink)}
-a{color:var(--gold);text-decoration:none}
-a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:2px}
-.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15.5px;line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--acc);color:#0a0a0c}
+a{color:var(--text);text-decoration:none}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1100px;margin:0 auto;padding:0 28px}
 
-/* 顶栏 */
-.topbar{position:sticky;top:0;z-index:50;background:rgba(7,7,13,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.topbar .wrap{display:flex;align-items:center;gap:22px;height:60px}
-.brand{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-weight:900;font-size:18px;color:var(--text)}
-.brand .seal{width:26px;height:26px;border:1.5px solid var(--gold);border-radius:5px;display:grid;place-items:center;color:var(--gold);font-family:var(--serif);font-size:14px;font-weight:900;transform:rotate(-4deg)}
-.nav{display:flex;gap:18px;margin-left:auto;align-items:center;font-size:14px}
-.nav a{color:var(--mut)} .nav a:hover{color:var(--gold)}
-.langbtn{background:none;border:1px solid var(--line2);color:var(--mut);font-family:var(--mono);font-size:12px;padding:4px 10px;border-radius:99px;cursor:pointer}
-.langbtn:hover{color:var(--gold);border-color:var(--gold)}
-.btn{display:inline-block;padding:10px 22px;border-radius:6px;font-weight:700;font-size:15px;border:1px solid var(--gold);transition:transform .15s ease, box-shadow .15s ease}
-.btn.gold{background:var(--gold);color:var(--ink)}
-.btn.gold:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(232,200,127,.25)}
-.btn.ghost{color:var(--gold)} .btn.ghost:hover{background:rgba(232,200,127,.08)}
-.topbar .btn{padding:7px 16px;font-size:13px}
+/* ── 多层背景:点阵网格 + 噪点 + 环境光 ── */
+.bg-grid{position:fixed;inset:0;z-index:-3;background-image:radial-gradient(circle,rgba(255,255,255,.045) 1px,transparent 1px);background-size:28px 28px;
+  -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%);mask-image:radial-gradient(ellipse 90% 70% at 50% 0%,#000 30%,transparent 75%)}
 
-/* HERO */
-.hero{padding:84px 0 64px;position:relative;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:-40% -20% auto;height:120%;background:radial-gradient(ellipse 50% 40% at 70% 20%,rgba(232,200,127,.07),transparent 70%);pointer-events:none}
-.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center;position:relative}
-.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--gold-deep);text-transform:uppercase;margin-bottom:18px}
-.eyebrow b{color:var(--gold);border:1px solid var(--line2);padding:2px 8px;border-radius:99px;margin-left:8px}
-h1{font-family:var(--serif);font-weight:900;font-size:clamp(40px,5.6vw,62px);line-height:1.18;letter-spacing:.01em}
-h1 .gd{color:var(--gold)}
-.hero-sub{margin:22px 0 30px;color:var(--mut);font-size:17px;max-width:30em}
-.hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-.hero-note{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:16px}
-.hero-note .ok{color:var(--green)}
+.blob{position:absolute;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:-2}
+.blob.amber{width:640px;height:440px;background:rgba(244,185,66,.07);animation:drift 22s ease-in-out infinite alternate}
+.blob.indigo{width:560px;height:560px;background:rgba(99,102,241,.055);animation:drift 26s ease-in-out infinite alternate-reverse}
+@keyframes drift{to{transform:translate(60px,40px) scale(1.12)}}
 
-/* 活体演示面板 */
-.demo{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.4);font-size:14px;overflow:hidden}
-.demo-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);font-family:var(--serif);font-weight:700}
-.demo-head .dot{width:9px;height:9px;border-radius:50%;background:#3a3a4a} .demo-head .dot.g{background:var(--gold-deep)}
-.demo-head .ttl{margin-left:6px}
-.demo-tag{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--gold-deep);border:1px solid var(--line);padding:2px 8px;border-radius:99px}
+/* ── 顶栏 ── */
+.topbar{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100;width:min(1100px,calc(100% - 28px));
+  background:rgba(13,13,16,.62);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);
+  border:1px solid var(--hair);border-radius:14px}
+.topbar .in{display:flex;align-items:center;gap:24px;height:54px;padding:0 10px 0 16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;letter-spacing:-.01em}
+.brand .mark{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--acc-dim);border:1px solid rgba(244,185,66,.25);color:var(--acc)}
+.brand .mark svg{width:16px;height:16px}
+.nav{display:flex;gap:4px;margin-left:auto;align-items:center;font-size:13.5px}
+.nav>a{color:var(--mut);padding:6px 12px;border-radius:8px;transition:color .15s,background .15s}
+.nav>a:hover{color:var(--text);background:var(--srf2)}
+.langbtn{background:none;border:1px solid var(--hair2);color:var(--mut);font-family:var(--mono);font-size:11.5px;padding:5px 11px;border-radius:8px;cursor:pointer;transition:all .15s;margin:0 6px}
+.langbtn:hover{color:var(--text);border-color:rgba(255,255,255,.3)}
+
+/* ── 按钮 ── */
+.btn{position:relative;display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:10px;font-weight:600;font-size:14px;letter-spacing:-.01em;transition:all .2s var(--ease);overflow:hidden}
+.btn.pri{background:var(--acc);color:#0c0a05;box-shadow:0 0 0 1px rgba(244,185,66,.4),0 8px 24px -8px rgba(244,185,66,.45),inset 0 1px 0 rgba(255,255,255,.35)}
+.btn.pri:hover{transform:translateY(-1px);box-shadow:0 0 0 1px rgba(244,185,66,.55),0 14px 32px -8px rgba(244,185,66,.55),inset 0 1px 0 rgba(255,255,255,.35)}
+.btn.sec{color:var(--text);background:var(--srf);border:1px solid var(--hair2)}
+.btn.sec:hover{background:var(--srf2);border-color:rgba(255,255,255,.22);transform:translateY(-1px)}
+.topbar .btn{padding:7px 15px;font-size:13px;border-radius:9px}
+
+/* ── HERO ── */
+.hero{position:relative;padding:172px 0 104px;overflow:visible}
+.hero .blob.amber{top:-140px;right:-80px}
+.hero .blob.indigo{bottom:-260px;left:-180px}
+.hero .wrap{display:grid;grid-template-columns:1.04fr .96fr;gap:60px;align-items:center}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;color:var(--mut);text-transform:uppercase;border:1px solid var(--hair);border-radius:99px;padding:6px 14px;margin-bottom:28px;background:var(--srf)}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.eyebrow b{color:var(--acc);font-weight:600}
+h1{font-weight:700;font-size:clamp(44px,6.2vw,82px);line-height:1.08;letter-spacing:-.035em;
+  background:linear-gradient(180deg,#fff 35%,rgba(255,255,255,.5));-webkit-background-clip:text;background-clip:text;color:transparent}
+h1 .gd{background:none;-webkit-text-fill-color:var(--acc);color:var(--acc)}
+.hero-sub{margin:26px 0 34px;color:var(--mut);font-size:16.5px;max-width:29em;letter-spacing:-.005em}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.hero-note{display:flex;gap:20px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:28px}
+.hero-note span{display:inline-flex;align-items:center;gap:7px}
+.hero-note i{font-style:normal;color:var(--green)}
+
+/* ── 活体演示 ── */
+.demo-stage{perspective:1600px}
+.demo{position:relative;background:rgba(16,16,20,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--hair2);border-radius:16px;font-size:14px;overflow:hidden;
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 24px 60px -16px rgba(0,0,0,.7),0 60px 120px -30px rgba(0,0,0,.5);
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .3s ease;will-change:transform}
+.demo::before{content:"";position:absolute;inset:0 0 auto;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35) 50%,transparent)}
+.demo-head{display:flex;align-items:center;gap:7px;padding:13px 16px;border-bottom:1px solid var(--hair);font-weight:600;font-size:13.5px;letter-spacing:-.01em}
+.demo-head .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.12)}
+.demo-head .ttl{margin-left:8px}
+.demo-tag{margin-left:auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--acc);border:1px solid rgba(244,185,66,.3);padding:3px 9px;border-radius:7px;background:var(--acc-dim)}
 .demo-body{padding:18px 18px 16px}
-.mrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid rgba(255,255,255,.05);border-radius:8px;background:var(--panel2);margin-bottom:10px}
-.micon{width:34px;height:34px;border-radius:7px;display:grid;place-items:center;font-size:17px;background:rgba(232,200,127,.08);border:1px solid var(--line)}
-.mname{font-weight:500}
-.mnums{font-family:var(--mono);font-size:13px;color:var(--mut)}
-.mnums b{color:var(--text);font-weight:600}
-.badge{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:12.5px;padding:3px 10px;border-radius:99px;white-space:nowrap;opacity:0;transform:scale(1.6) rotate(-6deg)}
-.badge.show{animation:stamp .35s cubic-bezier(.2,1.4,.4,1) forwards}
-@keyframes stamp{to{opacity:1;transform:scale(1) rotate(0)}}
-.badge.miss{color:var(--red);background:rgba(255,116,136,.1);border:1px solid rgba(255,116,136,.35)}
-.badge.left{color:var(--blue);background:rgba(127,176,255,.1);border:1px solid rgba(127,176,255,.3)}
-.demo-count{display:flex;align-items:center;gap:10px;margin:14px 0 12px;font-size:13px;color:var(--mut)}
-.demo-count input{width:90px;background:var(--ink);border:1px solid var(--line2);color:var(--gold);font-family:var(--mono);font-size:14px;font-weight:600;padding:6px 10px;border-radius:6px;text-align:right}
-.demo-sum{display:flex;align-items:center;gap:10px;border-top:1px dashed var(--line2);padding-top:14px;opacity:0;transform:translateY(8px);transition:opacity .4s,transform .4s}
+.mrow{display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid var(--hair);border-radius:11px;background:var(--srf);margin-bottom:9px;transition:border-color .2s,background .2s}
+.mrow:hover{border-color:var(--hair2);background:var(--srf2)}
+.micon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:18px;background:var(--srf2);border:1px solid var(--hair)}
+.mname{font-weight:500;font-size:13.5px}
+.mnums{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.mnums b{color:var(--mut);font-weight:500}
+.badge{margin-left:auto;font-family:var(--mono);font-weight:600;font-size:12px;padding:4px 11px;border-radius:8px;white-space:nowrap;opacity:0;transform:scale(1.25)}
+.badge.show{animation:stamp .35s var(--ease) forwards}
+@keyframes stamp{to{opacity:1;transform:scale(1)}}
+.badge.miss{color:var(--red);background:rgba(255,107,126,.09);border:1px solid rgba(255,107,126,.3)}
+.badge.left{color:var(--blue);background:rgba(108,166,255,.09);border:1px solid rgba(108,166,255,.28)}
+.demo-count{display:flex;align-items:center;gap:10px;margin:15px 0 13px;font-size:12.5px;color:var(--mut)}
+.demo-count b{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;min-width:4.2em;text-align:right}
+.demo-sum{display:flex;align-items:center;gap:10px;border-top:1px solid var(--hair);padding-top:14px;opacity:0;transform:translateY(8px);transition:opacity .5s,transform .5s var(--ease)}
 .demo-sum.show{opacity:1;transform:none}
-.demo-sum .sumtxt{font-family:var(--mono);font-size:13px;color:var(--mut)}
-.demo-sum .sumtxt b{color:var(--gold)}
-.demo-sum button{margin-left:auto;background:var(--gold);color:var(--ink);border:none;font-weight:700;font-family:var(--sans);font-size:13px;padding:8px 16px;border-radius:6px;cursor:pointer}
-.demo-sum button:active{transform:scale(.97)}
-.demo-foot{font-family:var(--mono);font-size:11px;color:#5a5748;padding:10px 18px;border-top:1px solid var(--line)}
+.demo-sum .sumtxt{font-family:var(--mono);font-size:12.5px;color:var(--mut)}
+.demo-sum .sumtxt b{color:var(--acc);font-weight:600}
+.demo-sum button{margin-left:auto;background:var(--acc);color:#0c0a05;border:none;font-weight:600;font-family:var(--sans);font-size:12.5px;padding:8px 16px;border-radius:9px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.35);transition:transform .15s}
+.demo-sum button:active{transform:scale(.96)}
+.demo-foot{font-family:var(--mono);font-size:10.5px;color:var(--dim);padding:10px 18px;border-top:1px solid var(--hair)}
 
-/* 公示牌(合规) */
-.section{padding:72px 0}
-.sec-eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--gold-deep);text-transform:uppercase;margin-bottom:12px}
-h2{font-family:var(--serif);font-weight:900;font-size:clamp(26px,3.4vw,36px);margin-bottom:14px}
-.sec-sub{color:var(--mut);max-width:42em;margin-bottom:36px}
-.notice{border:1px solid var(--line2);border-radius:12px;background:linear-gradient(180deg,rgba(232,200,127,.05),transparent 50%);padding:34px;position:relative}
-.notice .stamp-seal{position:absolute;top:24px;right:28px;font-family:var(--serif);font-weight:900;font-size:13px;color:var(--gold);border:2px solid var(--gold);border-radius:8px;padding:6px 12px;transform:rotate(6deg);opacity:.85;line-height:1.4;text-align:center}
-.notice h3{font-family:var(--serif);font-size:21px;margin-bottom:8px}
-.notice p.lead{color:var(--mut);max-width:38em;margin-bottom:24px}
-.ledger{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.ledger .col{border-radius:10px;padding:20px 22px;border:1px solid var(--line)}
-.ledger .col.ok{border-color:rgba(143,217,168,.3);background:rgba(143,217,168,.04)}
-.ledger .col.no{border-color:rgba(255,116,136,.25);background:rgba(255,116,136,.03)}
-.ledger .col h4{font-size:15px;margin-bottom:8px}
-.ledger .col.ok h4{color:var(--green)} .ledger .col.no h4{color:var(--red)}
-.ledger .col p{font-size:14px;color:var(--mut)}
-.notice .tail{margin-top:22px;font-size:14px;color:var(--mut)}
-.notice .tail b{color:var(--text)}
+/* ── 节 ── */
+.section{padding:104px 0;position:relative}
+.sec-eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
+h2{font-weight:700;font-size:clamp(28px,3.6vw,42px);margin-bottom:14px;letter-spacing:-.03em;
+  background:linear-gradient(180deg,#fff 40%,rgba(255,255,255,.6));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sec-sub{color:var(--mut);max-width:44em;margin-bottom:44px;font-size:15.5px}
 
-/* 功能 */
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px 22px;transition:border-color .2s,transform .2s}
-.card:hover{border-color:var(--line2);transform:translateY(-2px)}
-.card .k{font-family:var(--mono);font-size:11px;color:var(--gold-deep);letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px}
-.card h3{font-family:var(--serif);font-size:18px;margin-bottom:8px}
-.card p{font-size:14px;color:var(--mut)}
-.card code{font-family:var(--mono);font-size:12.5px;color:var(--gold);background:rgba(232,200,127,.07);padding:1px 6px;border-radius:4px}
+/* ── 入场:位移 + 模糊消散 ── */
+[data-reveal]{opacity:0;transform:translateY(16px);filter:blur(7px);transition:opacity .65s var(--ease),transform .65s var(--ease),filter .65s var(--ease);transition-delay:var(--d,0s)}
+[data-reveal].in{opacity:1;transform:none;filter:none}
 
-/* 2.0.0 */
-.rel{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-.rel .card h3 .new{font-family:var(--mono);font-size:10px;color:var(--ink);background:var(--gold);border-radius:99px;padding:2px 8px;vertical-align:3px;margin-left:8px}
+/* ── 合规对照 ── */
+.notice{border:1px solid var(--hair);border-radius:18px;padding:40px}
+.notice .head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.notice h3{font-weight:700;font-size:21px;letter-spacing:-.02em}
+.chipchk{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--green);border:1px solid rgba(95,211,154,.3);background:rgba(95,211,154,.07);padding:4px 11px;border-radius:99px}
+.notice p.lead{color:var(--mut);max-width:42em;margin-bottom:26px;font-size:14.5px}
+.ledger{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ledger .col{border-radius:12px;padding:22px 24px;border:1px solid var(--hair)}
+.ledger .col h4{font-size:14px;margin-bottom:8px;font-weight:600;display:flex;align-items:center;gap:8px}
+.ledger .col h4 i{font-style:normal;font-family:var(--mono)}
+.ledger .col.ok h4 i{color:var(--green)} .ledger .col.no h4 i{color:var(--red)}
+.ledger .col p{font-size:13.5px;color:var(--mut)}
+.notice .tail{margin-top:22px;font-size:13.5px;color:var(--mut)} .notice .tail b{color:var(--text)}
 
-/* 数字带 */
-.stats{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel)}
-.stats .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:34px 24px}
-.stat{text-align:center;border-left:1px dashed var(--line)}
+/* ── Bento ── */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{position:relative;border:1px solid var(--hair);border-radius:14px;padding:26px 24px;transition:border-color .2s}
+.card:hover{border-color:var(--hair2)}
+.card .k{font-family:var(--mono);font-size:10.5px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase;margin-bottom:13px}
+.card h3{font-size:16.5px;margin-bottom:8px;font-weight:600;letter-spacing:-.015em}
+.card p{font-size:13.5px;color:var(--mut)}
+.card code{font-family:var(--mono);font-size:12px;color:var(--acc);background:var(--acc-dim);padding:1px 6px;border-radius:5px}
+/* ── 数字带 ── */
+.stats{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);position:relative}
+.stats .wrap{display:grid;grid-template-columns:repeat(4,1fr);padding:56px 28px;position:relative}
+.stat{text-align:center;border-left:1px solid var(--hair);padding:0 12px}
 .stat:first-child{border-left:none}
-.stat .n{font-family:var(--mono);font-weight:700;font-size:34px;color:var(--gold)}
-.stat .l{font-size:13px;color:var(--mut);margin-top:4px}
+.stat .n{font-family:var(--mono);font-weight:600;font-size:clamp(34px,4.4vw,52px);letter-spacing:-.02em;color:var(--text);font-variant-numeric:tabular-nums}
+.stat:first-child .n{color:var(--acc)}
+.stat .l{font-size:12.5px;color:var(--dim);margin-top:7px}
 
-/* 安装 */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;counter-reset:st}
-.step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px 22px;counter-increment:st;position:relative}
-.step::before{content:counter(st,decimal-leading-zero);font-family:var(--mono);font-weight:700;font-size:13px;color:var(--gold);border:1px solid var(--line2);border-radius:99px;padding:3px 10px;display:inline-block;margin-bottom:14px}
-.step h3{font-size:16px;margin-bottom:6px}
-.step p{font-size:14px;color:var(--mut)}
-.install-cta{margin-top:30px;text-align:center}
+/* ── 2.0.0 ── */
+.rel{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.new{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--acc);border:1px solid rgba(244,185,66,.35);background:var(--acc-dim);border-radius:6px;padding:2px 7px;vertical-align:3px;margin-left:9px}
 
-/* 页脚 */
-footer{border-top:1px solid var(--line);padding:48px 0 64px;color:var(--mut);font-size:14px}
-footer .cols{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:32px}
-footer h4{font-family:var(--serif);color:var(--text);font-size:15px;margin-bottom:12px}
-footer .thx{line-height:2}
-footer .fine{margin-top:36px;padding-top:20px;border-top:1px dashed var(--line);font-family:var(--mono);font-size:12px;color:#5a5748;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
-footer code{font-family:var(--mono);font-size:12.5px;color:var(--gold)}
+/* ── 步骤 ── */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px}
+.step{border:1px solid var(--hair);border-radius:14px;padding:26px 24px;transition:border-color .2s}
+.step:hover{border-color:var(--hair2)}
+.step .num{font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.1em;margin-bottom:14px}
+.step h3{font-size:15.5px;margin-bottom:6px;font-weight:600}
+.step p{font-size:13.5px;color:var(--mut)}
+.install-cta{margin-top:42px;text-align:center}
 
-@media (max-width:920px){
-  .hero .wrap{grid-template-columns:1fr;gap:40px}
-  .grid,.steps{grid-template-columns:1fr 1fr}
-  .stats .wrap{grid-template-columns:1fr 1fr;row-gap:24px}
-  .stat:nth-child(3){border-left:none}
+/* ── 页脚 ── */
+footer{position:relative;border-top:1px solid var(--hair);padding:64px 0 36px;color:var(--mut);font-size:13.5px;overflow:hidden}
+footer .cols{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:34px;position:relative;z-index:2}
+footer h4{color:var(--text);font-size:13.5px;margin-bottom:11px;font-weight:600;letter-spacing:-.01em}
+footer .thx{line-height:2;font-size:13px}
+footer code{font-family:var(--mono);font-size:12px;color:var(--acc)}
+footer a{color:var(--mut);border-bottom:1px solid var(--hair2)} footer a:hover{color:var(--text)}
+.wordmark{font-family:var(--sans);font-weight:700;font-size:clamp(60px,12vw,160px);line-height:1;letter-spacing:-.04em;text-align:center;margin-top:52px;
+  color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.07);user-select:none;white-space:nowrap}
+footer .fine{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;position:relative;z-index:2}
+
+@media (max-width:940px){
+  .hero{padding-top:140px}
+  .hero .wrap{grid-template-columns:1fr;gap:44px}
+  .bento{grid-template-columns:1fr 1fr}
+  .steps{grid-template-columns:1fr}
+  .stats .wrap{grid-template-columns:1fr 1fr;row-gap:30px}.stat:nth-child(3){border-left:none}
   footer .cols{grid-template-columns:1fr 1fr}
 }
-@media (max-width:600px){
-  .grid,.steps,.ledger,.rel,footer .cols{grid-template-columns:1fr}
+@media (max-width:620px){
+  .bento,.ledger,.rel,footer .cols{grid-template-columns:1fr}
   .nav a.hidesm{display:none}
-  .stats .wrap{grid-template-columns:1fr 1fr}
+  .notice{padding:30px 22px}
 }
 @media (prefers-reduced-motion:reduce){
-  *{animation:none!important;transition:none!important}
-  .badge{opacity:1;transform:none}
-  .demo-sum{opacity:1;transform:none}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .badge,[data-reveal],.demo-sum{opacity:1!important;transform:none!important;filter:none!important}
 }
 </style>
 </head>
 <body>
+<div class="bg-grid"></div>
 
 <header class="topbar">
-  <div class="wrap">
-    <a class="brand" href="#"><span class="seal">伴</span><span data-i18n="brand">MWI 市场伴侣</span></a>
+  <div class="in">
+    <a class="brand" href="#">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.6"/><circle cx="19" cy="21" r="1.6"/><path d="M2 3h3l2.6 12.5a2 2 0 0 0 2 1.5h8.7a2 2 0 0 0 2-1.6L22 7H6"/></svg></span>
+      <span data-i18n="brand">MWI 市场伴侣</span>
+    </a>
     <nav class="nav">
       <a href="#features" class="hidesm" data-i18n="nav_features">功能</a>
       <a href="#v2" class="hidesm" data-i18n="nav_v2">2.0.0</a>
       <a href="/guide" data-i18n="nav_guide">使用说明</a>
       <button class="langbtn" id="langToggle">EN</button>
-      <a class="btn gold" href="https://greasyfork.org/zh-CN/scripts/567386" data-i18n="nav_install">安装</a>
+      <a class="btn pri" href="https://greasyfork.org/zh-CN/scripts/567386"><span data-i18n="nav_install">安装</span></a>
     </nav>
   </div>
 </header>
 
 <section class="hero">
+  <div class="blob amber"></div><div class="blob indigo"></div>
   <div class="wrap">
     <div>
-      <div class="eyebrow">MWI MARKET MATE <b>v2.0.0</b></div>
+      <div class="eyebrow"><span class="dot"></span>MARKET MATE <b>v2.0.0</b> · <span data-i18n="eyebrow_rel">正式发行</span></div>
       <h1 data-i18n-html="hero_h1">缺料,<br>算到<span class="gd">个位</span>。</h1>
       <p class="hero-sub" data-i18n="hero_sub">Milky Way Idle 制作缺料计算助手与手动采购辅助。数据直读游戏数据层,工匠茶与暴饮袋自动计入,一键加入购物清单——购买,永远由你亲手完成。</p>
       <div class="hero-cta">
-        <a class="btn gold" href="https://greasyfork.org/zh-CN/scripts/567386" data-i18n="cta_install">在 GreasyFork 安装</a>
-        <a class="btn ghost" href="/guide" data-i18n="cta_guide">阅读使用说明</a>
+        <a class="btn pri" href="https://greasyfork.org/zh-CN/scripts/567386"><span data-i18n="cta_install">在 GreasyFork 安装</span></a>
+        <a class="btn sec" href="/guide"><span data-i18n="cta_guide">阅读使用说明</span></a>
       </div>
-      <p class="hero-note"><span class="ok">✓</span> <span data-i18n="hero_note">无自动购买 · 与 1:1 人机操作完全对应 · 已提交管理员审阅</span></p>
+      <div class="hero-note">
+        <span><i>✓</i> <span data-i18n="hn1">无自动购买</span></span>
+        <span><i>✓</i> <span data-i18n="hn2">1:1 人机操作对应</span></span>
+        <span><i>✓</i> <span data-i18n="hn3">已提交管理员审阅</span></span>
+      </div>
     </div>
-    <div class="demo" id="demo">
-      <div class="demo-head">
-        <span class="dot"></span><span class="dot"></span><span class="dot g"></span>
-        <span class="ttl" data-i18n="demo_title">蔚蓝钉头锤 · 制作</span>
-        <span class="demo-tag" data-i18n="demo_tag">实时演算</span>
+    <div class="demo-stage">
+      <div class="demo" id="demo">
+        <div class="demo-head">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="ttl" data-i18n="demo_title">蔚蓝钉头锤 · 制作</span>
+          <span class="demo-tag" data-i18n="demo_tag">实时演算</span>
+        </div>
+        <div class="demo-body">
+          <div class="mrow">
+            <div class="micon">🧀</div>
+            <div><div class="mname" data-i18n="demo_m1">蔚蓝奶酪</div><div class="mnums"><b id="s1">29</b> <span data-i18n="demo_stock">库存</span> · ×<span id="p1">2</span>/<span data-i18n="demo_per">次</span></div></div>
+            <span class="badge" id="b1"></span>
+          </div>
+          <div class="mrow">
+            <div class="micon">🪵</div>
+            <div><div class="mname" data-i18n="demo_m2">雪松原木</div><div class="mnums"><b id="s2">32</b> <span data-i18n="demo_stock">库存</span> · ×<span id="p2">3</span>/<span data-i18n="demo_per">次</span></div></div>
+            <span class="badge" id="b2"></span>
+          </div>
+          <div class="demo-count">
+            <span data-i18n="demo_count">计划制作次数</span>
+            <b id="cntView">12</b>
+          </div>
+          <div class="demo-sum" id="sum">
+            <span class="sumtxt" data-i18n-html="demo_sum">共缺 <b id="sumN">—</b> 件材料</span>
+            <button id="addBtn" data-i18n="demo_add">加入购物清单</button>
+          </div>
+        </div>
+        <div class="demo-foot">window.MWIMM — <span data-i18n="demo_foot">这块面板就是插件在游戏里做的事</span></div>
       </div>
-      <div class="demo-body">
-        <div class="mrow">
-          <div class="micon">🧀</div>
-          <div><div class="mname" data-i18n="demo_m1">蔚蓝奶酪</div><div class="mnums"><b id="s1">29</b> <span data-i18n="demo_stock">库存</span> · ×<span id="p1">2</span>/<span data-i18n="demo_per">次</span></div></div>
-          <span class="badge" id="b1"></span>
-        </div>
-        <div class="mrow">
-          <div class="micon">🪵</div>
-          <div><div class="mname" data-i18n="demo_m2">雪松原木</div><div class="mnums"><b id="s2">32</b> <span data-i18n="demo_stock">库存</span> · ×<span id="p2">3</span>/<span data-i18n="demo_per">次</span></div></div>
-          <span class="badge" id="b2"></span>
-        </div>
-        <div class="demo-count">
-          <label for="cnt" data-i18n="demo_count">计划制作次数</label>
-          <input id="cnt" type="number" min="1" max="99999" value="12">
-          <span data-i18n="demo_try">← 改改看,徽章会重算</span>
-        </div>
-        <div class="demo-sum" id="sum">
-          <span class="sumtxt" data-i18n-html="demo_sum">共缺 <b id="sumN">—</b> 件材料</span>
-          <button id="addBtn" data-i18n="demo_add">加入购物清单</button>
-        </div>
-      </div>
-      <div class="demo-foot">window.MWIMM — <span data-i18n="demo_foot">这块面板就是插件在游戏里做的事</span></div>
     </div>
   </div>
 </section>
 
 <section class="section" id="compliance">
   <div class="wrap">
-    <div class="notice">
-      <div class="stamp-seal" data-i18n-html="seal">已提交<br>管理员审阅</div>
-      <h3 data-i18n="comp_h">合规性公示</h3>
+    <div class="notice" data-reveal>
+      <div class="head">
+        <h3 data-i18n="comp_h">合规性公示</h3>
+        <span class="chipchk">✓ <span data-i18n="seal">已提交管理员审阅</span></span>
+      </div>
       <p class="lead" data-i18n="comp_lead">本插件不包含任何自动购买功能——自动操作违反游戏规则第 4.2 条。它只负责帮你找到物品、算清数量,剩下的交给你来完成。</p>
       <div class="ledger">
         <div class="col ok">
-          <h4 data-i18n="comp_ok_h">✓ 本插件做的事</h4>
+          <h4><i>✓</i> <span data-i18n="comp_ok_h">本插件做的事</span></h4>
           <p data-i18n="comp_ok_p">在客户端跳转到某个物品的市场页面——与你手动 Shift 点击背包物品效果完全一致。一次点击,一次请求。不信任跳转?也可以只用市场内高亮。</p>
         </div>
         <div class="col no">
-          <h4 data-i18n="comp_no_h">✗ 违规插件做的事</h4>
+          <h4><i>✗</i> <span data-i18n="comp_no_h">违规插件做的事</span></h4>
           <p data-i18n="comp_no_p">一键完成多种物品的批量购买,向服务器批量发送请求——这是自动化操作,本插件不做,永远不做。</p>
         </div>
       </div>
@@ -235,56 +286,60 @@ footer code{font-family:var(--mono);font-size:12.5px;color:var(--gold)}
   </div>
 </section>
 
-<section class="section" id="features">
+<section class="section" id="features" style="padding-top:24px">
   <div class="wrap">
-    <div class="sec-eyebrow" data-i18n="feat_eyebrow">FEATURES · 功能</div>
-    <h2 data-i18n="feat_h">从"缺多少"到"买回来",中间的一切</h2>
-    <p class="sec-sub" data-i18n="feat_sub">打开任意制作面板,材料行上直接长出徽章;缺的东西一键进清单,清单帮你逐个跳到市场——每一步都看得见,每一步都是你在操作。</p>
-    <div class="grid">
-      <div class="card"><div class="k">CALC</div><h3 data-i18n="f1_h">缺料计算</h3><p data-i18n="f1_p">直读游戏数据层,不解析屏幕文本,精确到个位。工匠茶、暴饮袋自动减免,可选 Z-score 安全边际(90%–99.9%)。</p></div>
-      <div class="card"><div class="k">COVERAGE</div><h3 data-i18n="f2_h">全面板覆盖</h3><p data-i18n="f2_p">制作、炼金(点金/分解/转化)、房屋建造,以及从市场、库存任意位置打开的详情弹窗——徽章无处不在。</p></div>
-      <div class="card"><div class="k">CART</div><h3 data-i18n="f3_h">购物清单</h3><p data-i18n="f3_p">桌面侧栏 / 移动抽屉双形态,市场实时价格与预估总价;WebSocket 精确追踪库存,买到自动扣减,购齐自动收起。</p></div>
-      <div class="card"><div class="k">MARKET</div><h3 data-i18n="f4_h">采购流水线</h3><p data-i18n="f4_p">市场弹窗自动预填数量,购齐横幅提示下一项,自定义快捷键一按直达——全部由你手动触发。</p></div>
-      <div class="card"><div class="k">PLANS</div><h3 data-i18n="f5_h">计划与升级链</h3><p data-i18n="f5_p">制作计划锁定材料库存,根治多配方共用材料的缺口误算;升级链树形展示,逐步建独立计划,完成自动释放。</p></div>
-      <div class="card"><div class="k">DIAG</div><h3 data-i18n="f6_h">互操作与诊断</h3><p data-i18n="f6_p">公共 API <code>window.MWIMM</code> 供其他脚本调用;与主流插件同开经专项适配;出问题一句 <code>__log()</code> 导出全部诊断信息。</p></div>
+    <div class="sec-eyebrow" data-reveal data-i18n="feat_eyebrow">FEATURES</div>
+    <h2 data-reveal style="--d:.05s" data-i18n="feat_h">从"缺多少"到"买回来",中间的一切</h2>
+    <p class="sec-sub" data-reveal style="--d:.1s" data-i18n="feat_sub">打开任意制作面板,材料行上直接长出徽章;缺的东西一键进清单,清单帮你逐个跳到市场——每一步都看得见,每一步都是你在操作。</p>
+    <div class="bento">
+      <div class="card" data-reveal>
+        <div class="k">CALC ENGINE</div>
+        <h3 data-i18n="f1_h">缺料计算,精确到个位</h3>
+        <p data-i18n="f1_p">直读游戏数据层,不解析屏幕文本。工匠茶、暴饮袋自动减免,可选 Z-score 安全边际(90%–99.9%);三层防注入,与其他插件同开也不出鬼数。</p>
+      </div>
+      <div class="card" data-reveal style="--d:.07s"><div class="k">COVERAGE</div><h3 data-i18n="f2_h">全面板覆盖</h3><p data-i18n="f2_p">制作、炼金(点金/分解/转化)、房屋建造,以及从市场、库存任意位置打开的详情弹窗——徽章无处不在。</p></div>
+      <div class="card" data-reveal style="--d:.04s"><div class="k">CART</div><h3 data-i18n="f3_h">购物清单</h3><p data-i18n="f3_p">桌面侧栏 / 移动抽屉双形态,市场实时价格与预估总价;WebSocket 精确追踪库存,买到自动扣减,购齐自动收起。</p></div>
+      <div class="card" data-reveal style="--d:.09s"><div class="k">MARKET</div><h3 data-i18n="f4_h">采购流水线</h3><p data-i18n="f4_p">市场弹窗自动预填数量,购齐横幅提示下一项,自定义快捷键一按直达——全部由你手动触发。</p></div>
+      <div class="card" data-reveal style="--d:.13s"><div class="k">PLANS</div><h3 data-i18n="f5_h">计划与升级链</h3><p data-i18n="f5_p">制作计划锁定材料库存,根治多配方共用材料的缺口误算;升级链树形展示,逐步建独立计划,完成自动释放。</p></div>
+      <div class="card" data-reveal style="--d:.17s"><div class="k">DIAG</div><h3 data-i18n="f6_h">互操作与诊断</h3><p data-i18n="f6_p">公共 API <code>window.MWIMM</code> 供其他脚本调用;出问题一句 <code>__log()</code> 导出全部诊断信息,反馈只需一次粘贴。</p></div>
     </div>
   </div>
 </section>
 
 <div class="stats">
   <div class="wrap">
-    <div class="stat"><div class="n">197</div><div class="l" data-i18n="st1">项回归测试守护每次更新</div></div>
-    <div class="stat"><div class="n">0</div><div class="l" data-i18n="st2">次自动操作,合规零妥协</div></div>
-    <div class="stat"><div class="n">±0</div><div class="l" data-i18n="st3">缺料误差,精确到个位</div></div>
-    <div class="stat"><div class="n">2</div><div class="l" data-i18n="st4">种语言,跟随游戏切换</div></div>
+    <div class="stat" data-reveal><div class="n" data-count="197">0</div><div class="l" data-i18n="st1">项回归测试守护每次更新</div></div>
+    <div class="stat" data-reveal style="--d:.06s"><div class="n" data-count="0">0</div><div class="l" data-i18n="st2">次自动操作,合规零妥协</div></div>
+    <div class="stat" data-reveal style="--d:.12s"><div class="n"><span style="font-size:.65em;vertical-align:8px">±</span><span data-count="0">0</span></div><div class="l" data-i18n="st3">缺料误差,精确到个位</div></div>
+    <div class="stat" data-reveal style="--d:.18s"><div class="n" data-count="2">0</div><div class="l" data-i18n="st4">种语言,跟随游戏切换</div></div>
   </div>
 </div>
 
 <section class="section" id="v2">
   <div class="wrap">
-    <div class="sec-eyebrow">RELEASE · 2.0.0</div>
-    <h2 data-i18n="v2_h">2.0.0:架构升级 + 稳定性大修</h2>
-    <p class="sec-sub" data-i18n="v2_sub">十余轮候选版打磨后的正式发行版。完整更新日志见 GreasyFork 页面。</p>
+    <div class="sec-eyebrow" data-reveal>RELEASE 2.0.0</div>
+    <h2 data-reveal style="--d:.05s" data-i18n="v2_h">2.0.0:架构升级 + 稳定性大修</h2>
+    <p class="sec-sub" data-reveal style="--d:.1s" data-i18n="v2_sub">十余轮候选版打磨后的正式发行版。完整更新日志见 GreasyFork 页面。</p>
     <div class="rel">
-      <div class="card"><h3><span data-i18n="v2a_h">全新界面</span><span class="new">NEW</span></h3><p data-i18n="v2a_p">Shadow DOM 双形态壳,样式与游戏及其他插件彻底隔离;设置即时生效、自动保存。</p></div>
-      <div class="card"><h3><span data-i18n="v2b_h">炼金与弹窗支持</span><span class="new">NEW</span></h3><p data-i18n="v2b_p">点金/分解/转化按炼金语义正确计算;任意位置打开的详情弹窗同样获得徽章与清单面板。</p></div>
-      <div class="card"><h3 data-i18n="v2c_h">徽章自愈</h3><p data-i18n="v2c_p">任何插件以任何方式抹除徽章,最迟 1 秒自动补回——逐行完整性核对 + 每秒看门狗 + 后台切回即刷新。</p></div>
-      <div class="card"><h3 data-i18n="v2d_h">诊断四件套</h3><p data-i18n="v2d_p">__log / __probe / __key / __selftest,一句命令导出完整诊断,反馈问题从此只需一次粘贴。</p></div>
+      <div class="card" data-reveal><h3><span data-i18n="v2a_h">全新界面</span><span class="new">NEW</span></h3><p data-i18n="v2a_p">Shadow DOM 双形态壳,样式与游戏及其他插件彻底隔离;设置即时生效、自动保存。</p></div>
+      <div class="card" data-reveal style="--d:.06s"><h3><span data-i18n="v2b_h">炼金与弹窗支持</span><span class="new">NEW</span></h3><p data-i18n="v2b_p">点金/分解/转化按炼金语义正确计算;任意位置打开的详情弹窗同样获得徽章与清单面板。</p></div>
+      <div class="card" data-reveal style="--d:.04s"><h3 data-i18n="v2c_h">徽章自愈</h3><p data-i18n="v2c_p">任何插件以任何方式抹除徽章,最迟 1 秒自动补回——逐行完整性核对 + 每秒看门狗 + 后台切回即刷新。</p></div>
+      <div class="card" data-reveal style="--d:.1s"><h3 data-i18n="v2d_h">诊断四件套</h3><p data-i18n="v2d_p">__log / __probe / __key / __selftest,一句命令导出完整诊断,反馈问题从此只需一次粘贴。</p></div>
     </div>
   </div>
 </section>
 
-<section class="section" id="install">
+<section class="section" id="install" style="padding-top:16px">
   <div class="wrap">
-    <div class="sec-eyebrow" data-i18n="ins_eyebrow">INSTALL · 三步开始</div>
-    <h2 data-i18n="ins_h">两分钟装好</h2>
-    <div class="steps" style="margin-top:36px">
-      <div class="step"><h3 data-i18n="i1_h">安装脚本管理器</h3><p data-i18n="i1_p">浏览器装上 Tampermonkey(篡改猴)扩展,Chrome / Edge / Firefox 均可。</p></div>
-      <div class="step"><h3 data-i18n="i2_h">安装市场伴侣</h3><p data-i18n="i2_p">打开 GreasyFork 页面点「安装此脚本」,即装即用,无需任何配置。</p></div>
-      <div class="step"><h3 data-i18n="i3_h">打开制作面板</h3><p data-i18n="i3_p">进入游戏,打开任意制作面板——徽章已经在等你了。</p></div>
+    <div class="sec-eyebrow" data-reveal data-i18n="ins_eyebrow">INSTALL</div>
+    <h2 data-reveal style="--d:.05s" data-i18n="ins_h">两分钟装好</h2>
+    <div class="steps">
+      <div class="step" data-reveal><div class="num">01</div><h3 data-i18n="i1_h">安装脚本管理器</h3><p data-i18n="i1_p">浏览器装上 Tampermonkey(篡改猴)扩展,Chrome / Edge / Firefox 均可。</p></div>
+      <div class="step" data-reveal style="--d:.07s"><div class="num">02</div><h3 data-i18n="i2_h">安装市场伴侣</h3><p data-i18n="i2_p">打开 GreasyFork 页面点「安装此脚本」,即装即用,无需任何配置。</p></div>
+      <div class="step" data-reveal style="--d:.14s"><div class="num">03</div><h3 data-i18n="i3_h">打开制作面板</h3><p data-i18n="i3_p">进入游戏,打开任意制作面板——徽章已经在等你了。</p></div>
     </div>
-    <div class="install-cta">
-      <a class="btn gold" href="https://greasyfork.org/zh-CN/scripts/567386" data-i18n="cta_install2">前往 GreasyFork 安装 v2.0.0</a>
+    <div class="install-cta" data-reveal>
+      <a class="btn pri" href="https://greasyfork.org/zh-CN/scripts/567386"><span data-i18n="cta_install2">前往 GreasyFork 安装 v2.0.0</span></a>
     </div>
   </div>
 </section>
@@ -298,13 +353,14 @@ footer code{font-family:var(--mono);font-size:12.5px;color:var(--gold)}
       </div>
       <div>
         <h4 data-i18n="ft_thx">致谢</h4>
-        <p class="thx" data-i18n="ft_thx_p">优化思路:Mooooooooo、AlphB、wangchyan、mutallip、Foreversunny 与他的朋友们、Joey、baozi、Star<br>BUG 反馈:Neilyo、ccat、SuxingX🐊</p>
+        <p class="thx" data-i18n-html="ft_thx_p">优化思路:Mooooooooo、AlphB、wangchyan、mutallip、Foreversunny 与他的朋友们、Joey、baozi、Star<br>BUG 反馈:Neilyo、ccat、SuxingX🐊</p>
       </div>
       <div>
         <h4 data-i18n="ft_fb">反馈</h4>
         <p data-i18n-html="ft_fb_p">遇到问题:F12 执行 <code>MWIMM.__log()</code>,把输出贴到 <a href="https://greasyfork.org/zh-CN/scripts/567386/feedback">GreasyFork 反馈区</a>。</p>
       </div>
     </div>
+    <div class="wordmark" aria-hidden="true">MARKET MATE</div>
     <div class="fine">
       <span>© 2026 ColaCola · MWI Market Mate v2.0.0</span>
       <span data-i18n="ft_fine">非官方工具,与 Milky Way Idle 官方无关</span>
@@ -313,95 +369,144 @@ footer code{font-family:var(--mono);font-size:12.5px;color:var(--gold)}
 </footer>
 
 <script>
-/* ── 活体演示:次数改动 → 徽章重算 ───────────────────── */
 (function(){
-  var stock=[29,32], per=[2,3];
-  var cnt=document.getElementById('cnt');
-  function zh(){return (localStorage.getItem('mm_lang')||'zh')==='zh';}
-  function render(first){
-    var n=Math.max(1,Math.min(99999,parseInt(cnt.value,10)||1));
-    var totalMiss=0;
-    for(var i=0;i<2;i++){
-      var need=per[i]*n, diff=need-stock[i];
-      var b=document.getElementById('b'+(i+1));
-      if(diff>0){ b.className='badge miss'; b.textContent=(zh()?'缺 ':'Need ')+diff.toLocaleString(); totalMiss+=diff; }
-      else { b.className='badge left'; b.textContent=(zh()?'余 ':'+')+(-diff).toLocaleString(); }
-      if(first){ (function(el,d){ setTimeout(function(){ el.classList.add('show'); },d); })(b,500+i*420); }
-      else b.classList.add('show');
-    }
-    document.getElementById('sumN').textContent=totalMiss.toLocaleString();
-    var sum=document.getElementById('sum');
-    if(first) setTimeout(function(){ sum.classList.add('show'); },1500); else sum.classList.add('show');
-  }
-  cnt.addEventListener('input',function(){render(false);});
-  document.getElementById('addBtn').addEventListener('click',function(){
-    this.textContent=zh()?'✓ 已加入(演示)':'✓ Added (demo)';
-    var self=this; setTimeout(function(){ self.textContent=zh()?'加入购物清单':'Add to cart'; },1400);
-  });
-  window.__demoRender=render;
-  render(true);
-})();
+"use strict";
+var rm=false; try{ rm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
 
-/* ── 中英切换 ─────────────────────────────────────────── */
-(function(){
-  var EN={
-    brand:'MWI Market Mate', nav_features:'Features', nav_v2:'2.0.0', nav_guide:'Guide', nav_install:'Install',
-    hero_h1:'Shortages,<br>down to the <span class="gd">last unit</span>.',
-    hero_sub:'A crafting shortage calculator and manual purchasing assistant for Milky Way Idle. Reads the game data layer directly, factors in Artisan Tea and Guzzling Pouch, one click to the shopping list — purchasing always stays in your hands.',
-    cta_install:'Install on GreasyFork', cta_guide:'Read the guide',
-    hero_note:'No auto-buy · Strict 1:1 human-action mapping · Submitted for admin review',
-    demo_title:'Azure War Hammer · Crafting', demo_tag:'Live calc', demo_m1:'Azure Cheese', demo_m2:'Cedar Log',
-    demo_stock:'in stock', demo_per:'per craft', demo_count:'Planned crafts', demo_try:'← edit me, badges recalc',
-    demo_sum:'Missing <b id="sumN">—</b> materials total', demo_add:'Add to cart',
-    demo_foot:'this panel is exactly what the plugin does in-game',
-    seal:'Submitted for<br>admin review', comp_h:'Compliance Notice',
-    comp_lead:'This plugin contains no auto-buy functionality — automation violates game rule 4.2. It only helps you find items and calculate quantities; the rest is up to you.',
-    comp_ok_h:'✓ What this plugin does', comp_ok_p:'Navigates to an item\'s market page on the client side — identical to you Shift-clicking an item in your inventory. One click, one request. Don\'t trust navigation? Use in-market highlighting only.',
-    comp_no_h:'✗ What rule-breakers do', comp_no_p:'One-click batch purchasing of multiple items, sending bulk requests to the server — that is automation. This plugin doesn\'t do it. Ever.',
-    comp_tail:'All purchases must be performed <b>manually</b> by the player.',
-    feat_eyebrow:'FEATURES', feat_h:'Everything between "how much" and "bought"',
-    feat_sub:'Open any crafting panel and badges grow right on the material rows; shortages go to the list in one click, and the list walks you through the market — every step visible, every step yours.',
-    f1_h:'Shortage calculation', f1_p:'Reads the game data layer directly — no screen-text parsing, accurate to the unit. Artisan Tea and Guzzling Pouch auto-applied, optional Z-score safety margin (90%–99.9%).',
-    f2_h:'Full panel coverage', f2_p:'Crafting, alchemy (Coinify / Decompose / Transmute), house building, and detail popups opened from the market or inventory — badges everywhere.',
-    f3_h:'Shopping list', f3_p:'Desktop rail / mobile drawer dual-form UI, live market prices and estimated total; precise WebSocket inventory tracking, auto-deduct on purchase, auto-collapse when done.',
-    f4_h:'Purchasing pipeline', f4_p:'Market dialogs pre-fill quantities, a fulfilled banner queues the next item, a custom shortcut jumps straight there — all manually triggered by you.',
-    f5_h:'Plans & upgrade chains', f5_p:'Crafting plans lock material inventory, fixing shared-material miscalculation for good; upgrade chain tree view with per-step plans, locks released on completion.',
-    f6_h:'Interop & diagnostics', f6_p:'Public API <code>window.MWIMM</code> for other scripts; tested side-by-side with major plugins; one <code>__log()</code> exports full diagnostics.',
-    st1:'regression tests guard every release', st2:'automated actions — zero compromise', st3:'shortage error, accurate to the unit', st4:'languages, following the game',
-    v2_h:'2.0.0: architecture upgrade + stability overhaul', v2_sub:'The official release after a dozen candidate builds. Full changelog on GreasyFork.',
-    v2a_h:'Brand-new UI', v2a_p:'Shadow DOM dual-form shell, fully isolated from the game and other plugins; settings apply instantly and auto-save.',
-    v2b_h:'Alchemy & popup support', v2b_p:'Coinify / Decompose / Transmute calculated with correct alchemy semantics; detail popups opened anywhere get badges and the list panel.',
-    v2c_h:'Badge self-healing', v2c_p:'If anything wipes the badges by any means, they\'re restored within 1 second — per-row integrity checks + a per-second watchdog + refresh on tab re-focus.',
-    v2d_h:'Diagnostics suite', v2d_p:'__log / __probe / __key / __selftest — one command exports full diagnostics; reporting an issue is one paste away.',
-    ins_eyebrow:'INSTALL', ins_h:'Set up in two minutes',
-    i1_h:'Install a script manager', i1_p:'Add the Tampermonkey extension to your browser — Chrome, Edge or Firefox.',
-    i2_h:'Install Market Mate', i2_p:'Open the GreasyFork page and click "Install this script". Zero configuration.',
-    i3_h:'Open a crafting panel', i3_p:'Enter the game and open any crafting panel — the badges are already waiting.',
-    cta_install2:'Install v2.0.0 on GreasyFork',
-    ft_about:'About', ft_about_p:'MWI Market Mate is built and maintained by ColaCola. Accurate, unkillable, observable — the three promises of 2.0.0.',
-    ft_thx:'Acknowledgments', ft_thx_p:'Ideas: Mooooooooo, AlphB, wangchyan, mutallip, Foreversunny & friends, Joey, baozi, Star<br>Bug reports: Neilyo, ccat, SuxingX🐊',
-    ft_fb:'Feedback', ft_fb_p:'Hit a problem? Run <code>MWIMM.__log()</code> in F12 and paste the output on the <a href="https://greasyfork.org/en/scripts/567386/feedback">GreasyFork feedback page</a>.',
-    ft_fine:'Unofficial tool, not affiliated with Milky Way Idle'
-  };
-  var ZH={}; // 首次加载时从 DOM 收集中文原文
-  document.querySelectorAll('[data-i18n],[data-i18n-html]').forEach(function(el){
-    var k=el.getAttribute('data-i18n')||el.getAttribute('data-i18n-html');
-    ZH[k]=el.getAttribute('data-i18n-html')!=null?el.innerHTML:el.textContent;
-  });
-  var btn=document.getElementById('langToggle');
-  function apply(lang){
-    var D=lang==='en'?EN:ZH;
-    document.querySelectorAll('[data-i18n]').forEach(function(el){ var k=el.getAttribute('data-i18n'); if(D[k]!=null) el.textContent=D[k]; });
-    document.querySelectorAll('[data-i18n-html]').forEach(function(el){ var k=el.getAttribute('data-i18n-html'); if(D[k]!=null) el.innerHTML=D[k]; });
-    document.documentElement.lang=lang==='en'?'en':'zh';
-    btn.textContent=lang==='en'?'中':'EN';
-    localStorage.setItem('mm_lang',lang);
-    if(window.__demoRender) window.__demoRender(false);   // 徽章文案随语言重算
+/* 活体演示:数字自动跳动(与统计带计数同款缓动),徽章逐帧同步悦动 */
+var stock=[29,32], per=[2,3], curN=12;
+var cntView=document.getElementById('cntView');
+function lang(){ try{return localStorage.getItem('mm_lang')||'zh';}catch(e){return 'zh';} }
+function draw(){
+  var zh=lang()==='zh', totalMiss=0;
+  cntView.textContent=curN.toLocaleString();
+  for(var i=0;i<2;i++){
+    var diff=per[i]*curN-stock[i], b=document.getElementById('b'+(i+1));
+    if(diff>0){ b.className='badge miss show'; b.textContent=(zh?'缺 ':'Need ')+diff.toLocaleString(); totalMiss+=diff; }
+    else { b.className='badge left show'; b.textContent=(zh?'余 ':'+')+(-diff).toLocaleString(); }
   }
-  btn.addEventListener('click',function(){ apply((localStorage.getItem('mm_lang')||'zh')==='zh'?'en':'zh'); });
-  var q=new URLSearchParams(location.search).get('lang');
-  var saved=q||localStorage.getItem('mm_lang')||'zh';
-  if(saved==='en') apply('en');
+  document.getElementById('sumN').textContent=totalMiss.toLocaleString();
+}
+function animateTo(target,done){
+  var from=curN,t0=null,dur=1100;
+  function f(t){ if(!t0)t0=t; var p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3);
+    curN=Math.round(from+(target-from)*p); draw();
+    if(p<1) requestAnimationFrame(f); else if(done) setTimeout(done,1700); }
+  requestAnimationFrame(f);
+}
+var seq=[180,1500,48,720,12], si=0;
+function loop(){ animateTo(seq[si],function(){ si=(si+1)%seq.length; loop(); }); }
+draw();
+document.getElementById('sum').classList.add('show');
+if(!rm){
+  var b1=document.getElementById('b1'), b2=document.getElementById('b2');
+  b1.classList.remove('show'); b2.classList.remove('show');
+  setTimeout(function(){ b1.classList.add('show'); },550);
+  setTimeout(function(){ b2.classList.add('show'); },930);
+  setTimeout(loop,2000);
+}
+document.getElementById('addBtn').addEventListener('click',function(){
+  var zh=lang()==='zh', self=this;
+  self.textContent=zh?'✓ 已加入(演示)':'✓ Added (demo)';
+  setTimeout(function(){ self.textContent=zh?'加入购物清单':'Add to cart'; },1400);
+});
+window.__demoRender=draw;
+
+/* 演示面板 3D 视差(克制,仅精确指针) */
+try{
+  if(!rm && window.matchMedia && window.matchMedia('(pointer:fine)').matches){
+    var demo=document.getElementById('demo'), stage=demo.parentElement;
+    stage.addEventListener('mousemove',function(e){
+      var r=stage.getBoundingClientRect();
+      var x=(e.clientX-r.left)/r.width-.5, y=(e.clientY-r.top)/r.height-.5;
+      demo.style.setProperty('--ry',(x*4).toFixed(2)+'deg');
+      demo.style.setProperty('--rx',(-y*4).toFixed(2)+'deg');
+    });
+    stage.addEventListener('mouseleave',function(){ demo.style.setProperty('--rx','0deg'); demo.style.setProperty('--ry','0deg'); });
+  }
+}catch(e){}
+
+/* 入场 + 计数 */
+function countUp(el){
+  var target=parseInt(el.getAttribute('data-count'),10)||0, t0=null, dur=1300;
+  if(rm||target===0){ el.textContent=target; return; }
+  function f(t){ if(!t0)t0=t; var p=Math.min(1,(t-t0)/dur); p=1-Math.pow(1-p,3);
+    el.textContent=Math.round(target*p); if(p<1) requestAnimationFrame(f); }
+  requestAnimationFrame(f);
+}
+var reveals=document.querySelectorAll('[data-reveal]');
+if('IntersectionObserver' in window){
+  var io=new IntersectionObserver(function(es){ es.forEach(function(en){
+    if(en.isIntersecting){ en.target.classList.add('in');
+      en.target.querySelectorAll('[data-count]').forEach(countUp);
+      if(en.target.hasAttribute('data-count')) countUp(en.target);
+      io.unobserve(en.target); } }); },{threshold:.16});
+  reveals.forEach(function(el){ io.observe(el); });
+}else{
+  reveals.forEach(function(el){ el.classList.add('in'); });
+  document.querySelectorAll('[data-count]').forEach(function(el){ el.textContent=el.getAttribute('data-count'); });
+}
+
+/* 中英切换 */
+var EN={
+  brand:'MWI Market Mate', nav_features:'Features', nav_v2:'2.0.0', nav_guide:'Guide', nav_install:'Install',
+  eyebrow_rel:'OFFICIAL RELEASE',
+  hero_h1:'Shortages,<br>down to the <span class="gd">last unit</span>.',
+  hero_sub:'A crafting shortage calculator and manual purchasing assistant for Milky Way Idle. Reads the game data layer directly, factors in Artisan Tea and Guzzling Pouch, one click to the shopping list — purchasing always stays in your hands.',
+  cta_install:'Install on GreasyFork', cta_guide:'Read the guide',
+  hn1:'No auto-buy', hn2:'Strict 1:1 action mapping', hn3:'Submitted for admin review',
+  demo_title:'Azure War Hammer · Crafting', demo_tag:'Live calc', demo_m1:'Azure Cheese', demo_m2:'Cedar Log',
+  demo_stock:'in stock', demo_per:'per craft', demo_count:'Planned crafts',
+  demo_sum:'Missing <b id="sumN">—</b> materials total', demo_add:'Add to cart',
+  demo_foot:'this panel is exactly what the plugin does in-game',
+  seal:'Submitted for admin review', comp_h:'Compliance Notice',
+  comp_lead:'This plugin contains no auto-buy functionality — automation violates game rule 4.2. It only helps you find items and calculate quantities; the rest is up to you.',
+  comp_ok_h:'What this plugin does', comp_ok_p:'Navigates to an item\'s market page on the client side — identical to you Shift-clicking an item in your inventory. One click, one request. Don\'t trust navigation? Use in-market highlighting only.',
+  comp_no_h:'What rule-breakers do', comp_no_p:'One-click batch purchasing of multiple items, sending bulk requests to the server — that is automation. This plugin doesn\'t do it. Ever.',
+  comp_tail:'All purchases must be performed <b>manually</b> by the player.',
+  feat_eyebrow:'FEATURES', feat_h:'Everything between "how much" and "bought"',
+  feat_sub:'Open any crafting panel and badges grow right on the material rows; shortages go to the list in one click, and the list walks you through the market — every step visible, every step yours.',
+  f1_h:'Shortage calc, to the unit', f1_p:'Reads the game data layer directly — no screen-text parsing. Artisan Tea and Guzzling Pouch auto-applied, optional Z-score margin (90%–99.9%); three-layer injection defense keeps numbers sane alongside other plugins.',
+  f2_h:'Full panel coverage', f2_p:'Crafting, alchemy (Coinify / Decompose / Transmute), house building, and detail popups opened from the market or inventory — badges everywhere.',
+  f3_h:'Shopping list', f3_p:'Desktop rail / mobile drawer dual-form UI, live market prices and estimated total; precise WebSocket inventory tracking, auto-deduct on purchase, auto-collapse when done.',
+  f4_h:'Purchasing pipeline', f4_p:'Market dialogs pre-fill quantities, a fulfilled banner queues the next item, a custom shortcut jumps straight there — all manually triggered by you.',
+  f5_h:'Plans & upgrade chains', f5_p:'Crafting plans lock material inventory, fixing shared-material miscalculation for good; upgrade chain tree view with per-step plans, locks released on completion.',
+  f6_h:'Interop & diagnostics', f6_p:'Public API <code>window.MWIMM</code> for other scripts; one <code>__log()</code> exports full diagnostics — reporting an issue is one paste away.',
+  st1:'regression tests guard every release', st2:'automated actions — zero compromise', st3:'shortage error, accurate to the unit', st4:'languages, following the game',
+  v2_h:'2.0.0: architecture upgrade + stability overhaul', v2_sub:'The official release after a dozen candidate builds. Full changelog on GreasyFork.',
+  v2a_h:'Brand-new UI', v2a_p:'Shadow DOM dual-form shell, fully isolated from the game and other plugins; settings apply instantly and auto-save.',
+  v2b_h:'Alchemy & popup support', v2b_p:'Coinify / Decompose / Transmute calculated with correct alchemy semantics; detail popups opened anywhere get badges and the list panel.',
+  v2c_h:'Badge self-healing', v2c_p:'If anything wipes the badges by any means, they\'re restored within 1 second — per-row integrity checks + a per-second watchdog + refresh on tab re-focus.',
+  v2d_h:'Diagnostics suite', v2d_p:'__log / __probe / __key / __selftest — one command exports full diagnostics; reporting an issue is one paste away.',
+  ins_eyebrow:'INSTALL', ins_h:'Set up in two minutes',
+  i1_h:'Install a script manager', i1_p:'Add the Tampermonkey extension to your browser — Chrome, Edge or Firefox.',
+  i2_h:'Install Market Mate', i2_p:'Open the GreasyFork page and click "Install this script". Zero configuration.',
+  i3_h:'Open a crafting panel', i3_p:'Enter the game and open any crafting panel — the badges are already waiting.',
+  cta_install2:'Install v2.0.0 on GreasyFork',
+  ft_about:'About', ft_about_p:'MWI Market Mate is built and maintained by ColaCola. Accurate, unkillable, observable — the three promises of 2.0.0.',
+  ft_thx:'Acknowledgments', ft_thx_p:'Ideas: Mooooooooo, AlphB, wangchyan, mutallip, Foreversunny & friends, Joey, baozi, Star<br>Bug reports: Neilyo, ccat, SuxingX🐊',
+  ft_fb:'Feedback', ft_fb_p:'Hit a problem? Run <code>MWIMM.__log()</code> in F12 and paste the output on the <a href="https://greasyfork.org/en/scripts/567386/feedback">GreasyFork feedback page</a>.',
+  ft_fine:'Unofficial tool, not affiliated with Milky Way Idle'
+};
+var ZH={};
+document.querySelectorAll('[data-i18n],[data-i18n-html]').forEach(function(el){
+  var k=el.getAttribute('data-i18n')||el.getAttribute('data-i18n-html');
+  ZH[k]=el.getAttribute('data-i18n-html')!=null?el.innerHTML:el.textContent;
+});
+var btn=document.getElementById('langToggle');
+function apply(l){
+  var D=l==='en'?EN:ZH;
+  document.querySelectorAll('[data-i18n]').forEach(function(el){ var k=el.getAttribute('data-i18n'); if(D[k]!=null) el.textContent=D[k]; });
+  document.querySelectorAll('[data-i18n-html]').forEach(function(el){ var k=el.getAttribute('data-i18n-html'); if(D[k]!=null) el.innerHTML=D[k]; });
+  document.documentElement.lang=l==='en'?'en':'zh';
+  btn.textContent=l==='en'?'中':'EN';
+  try{localStorage.setItem('mm_lang',l);}catch(e){}
+  draw();
+}
+btn.addEventListener('click',function(){ apply(lang()==='zh'?'en':'zh'); });
+var q=null; try{ q=new URLSearchParams(location.search).get('lang'); }catch(e){}
+var saved=q||lang();
+if(saved==='en') apply('en');
 })();
 </script>
 </body>
