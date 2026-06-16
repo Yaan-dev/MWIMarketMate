@@ -151,9 +151,10 @@ h2{font-weight:700;font-size:clamp(28px,3.6vw,42px);margin-bottom:14px;letter-sp
 .stat:first-child .n{color:var(--acc)}
 .stat .l{font-size:12.5px;color:var(--dim);margin-top:7px}
 
-/* ── 2.0.0 ── */
+/* ── release ── */
 .rel{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 .new{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--acc);border:1px solid rgba(244,185,66,.35);background:var(--acc-dim);border-radius:6px;padding:2px 7px;vertical-align:3px;margin-left:9px}
+.fix{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--red);border:1px solid rgba(255,107,126,.35);background:rgba(255,107,126,.1);border-radius:6px;padding:2px 7px;vertical-align:3px;margin-left:9px}
 
 /* ── 步骤 ── */
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:40px}
@@ -205,7 +206,7 @@ footer .fine{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);f
     </a>
     <nav class="nav">
       <a href="#features" class="hidesm" data-i18n="nav_features">功能</a>
-      <a href="#v2" class="hidesm" data-i18n="nav_v2">2.0.0</a>
+      <a href="#v2" class="hidesm" data-i18n="nav_v2">2.1.0</a>
       <a href="/guide" data-i18n="nav_guide">使用说明</a>
       <button class="langbtn" id="langToggle">EN</button>
       <a class="btn pri" href="https://greasyfork.org/zh-CN/scripts/567386"><span data-i18n="nav_install">安装</span></a>
@@ -217,7 +218,7 @@ footer .fine{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);f
   <div class="blob amber"></div><div class="blob indigo"></div>
   <div class="wrap">
     <div>
-      <div class="eyebrow"><span class="dot"></span>MARKET MATE <b>v2.0.0</b> · <span data-i18n="eyebrow_rel">正式发行</span></div>
+      <div class="eyebrow"><span class="dot"></span>MARKET MATE <b>v2.1.0</b> · <span data-i18n="eyebrow_rel">稳定性更新</span></div>
       <h1 data-i18n-html="hero_h1">缺料,<br>算到<span class="gd">个位</span>。</h1>
       <p class="hero-sub" data-i18n="hero_sub">Milky Way Idle 制作缺料计算助手与手动采购辅助。数据直读游戏数据层,工匠茶与暴饮袋自动计入,一键加入购物清单——购买,永远由你亲手完成。</p>
       <div class="hero-cta">
@@ -317,14 +318,14 @@ footer .fine{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);f
 
 <section class="section" id="v2">
   <div class="wrap">
-    <div class="sec-eyebrow" data-reveal>RELEASE 2.0.0</div>
-    <h2 data-reveal style="--d:.05s" data-i18n="v2_h">2.0.0:架构升级 + 稳定性大修</h2>
-    <p class="sec-sub" data-reveal style="--d:.1s" data-i18n="v2_sub">十余轮候选版打磨后的正式发行版。完整更新日志见 GreasyFork 页面。</p>
+    <div class="sec-eyebrow" data-reveal>RELEASE 2.1.0</div>
+    <h2 data-reveal style="--d:.05s" data-i18n="v2_h">2.1.0:全面板覆盖,抗插件冲突</h2>
+    <p class="sec-sub" data-reveal style="--d:.1s" data-i18n="v2_sub">在 2.0.0 架构之上的稳定性强化版——补齐炼金 / 强化面板,并根治与第三方插件同开时的徽章冻结。完整更新日志见 GreasyFork 页面。</p>
     <div class="rel">
-      <div class="card" data-reveal><h3><span data-i18n="v2a_h">全新界面</span><span class="new">NEW</span></h3><p data-i18n="v2a_p">Shadow DOM 双形态壳,样式与游戏及其他插件彻底隔离;设置即时生效、自动保存。</p></div>
-      <div class="card" data-reveal style="--d:.06s"><h3><span data-i18n="v2b_h">炼金与弹窗支持</span><span class="new">NEW</span></h3><p data-i18n="v2b_p">点金/分解/转化按炼金语义正确计算;任意位置打开的详情弹窗同样获得徽章与清单面板。</p></div>
-      <div class="card" data-reveal style="--d:.04s"><h3 data-i18n="v2c_h">徽章自愈</h3><p data-i18n="v2c_p">任何插件以任何方式抹除徽章,最迟 1 秒自动补回——逐行完整性核对 + 每秒看门狗 + 后台切回即刷新。</p></div>
-      <div class="card" data-reveal style="--d:.1s"><h3 data-i18n="v2d_h">诊断四件套</h3><p data-i18n="v2d_p">__log / __probe / __key / __selftest,一句命令导出完整诊断,反馈问题从此只需一次粘贴。</p></div>
+      <div class="card" data-reveal><h3><span data-i18n="v2a_h">炼金 / 强化全覆盖</span><span class="fix">FIX</span></h3><p data-i18n="v2a_p">炼金(点金 / 分解 / 转化)与强化面板的徽章和「加入购物车」按钮不再缺失,与制作面板一致覆盖。</p></div>
+      <div class="card" data-reveal style="--d:.06s"><h3><span data-i18n="v2b_h">抗插件冲突</span><span class="fix">FIX</span></h3><p data-i18n="v2b_p">跳转市场往返后徽章不再冻结或消失,即便与会向面板注入内容的第三方插件同开——根治了刷新被 DOM 风暴「饿死」的根因。</p></div>
+      <div class="card" data-reveal style="--d:.04s"><h3><span data-i18n="v2c_h">数据层配方识别</span><span class="new">NEW</span></h3><p data-i18n="v2c_p">改用 React Fiber 读取确定的配方标识,不再依赖屏幕文本或类名推断——识别更稳,与其他插件共存更可靠。</p></div>
+      <div class="card" data-reveal style="--d:.1s"><h3 data-i18n="v2d_h">看门狗增强</h3><p data-i18n="v2d_p">市场弹窗开 / 关即时刷新、面板复用换配方强制重绘;__log() 新增去抖诊断计数,排查跨插件冲突更快。</p></div>
     </div>
   </div>
 </section>
@@ -339,7 +340,7 @@ footer .fine{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);f
       <div class="step" data-reveal style="--d:.14s"><div class="num">03</div><h3 data-i18n="i3_h">打开制作面板</h3><p data-i18n="i3_p">进入游戏,打开任意制作面板——徽章已经在等你了。</p></div>
     </div>
     <div class="install-cta" data-reveal>
-      <a class="btn pri" href="https://greasyfork.org/zh-CN/scripts/567386"><span data-i18n="cta_install2">前往 GreasyFork 安装 v2.0.0</span></a>
+      <a class="btn pri" href="https://greasyfork.org/zh-CN/scripts/567386"><span data-i18n="cta_install2">前往 GreasyFork 安装 v2.1.0</span></a>
     </div>
   </div>
 </section>
@@ -349,7 +350,7 @@ footer .fine{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);f
     <div class="cols">
       <div>
         <h4 data-i18n="ft_about">关于</h4>
-        <p data-i18n="ft_about_p">MWI 市场伴侣由 ColaCola 开发维护。算得对、打不死、看得清——这是 2.0.0 对你的三个承诺。</p>
+        <p data-i18n="ft_about_p">MWI 市场伴侣由 ColaCola 独立开发维护。</p>
       </div>
       <div>
         <h4 data-i18n="ft_thx">致谢</h4>
@@ -362,7 +363,7 @@ footer .fine{margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);f
     </div>
     <div class="wordmark" aria-hidden="true">MARKET MATE</div>
     <div class="fine">
-      <span>© 2026 ColaCola · MWI Market Mate v2.0.0</span>
+      <span>© 2026 ColaCola · MWI Market Mate v2.1.0</span>
       <span data-i18n="ft_fine">非官方工具,与 Milky Way Idle 官方无关</span>
     </div>
   </div>
@@ -449,8 +450,8 @@ if('IntersectionObserver' in window){
 
 /* 中英切换 */
 var EN={
-  brand:'MWI Market Mate', nav_features:'Features', nav_v2:'2.0.0', nav_guide:'Guide', nav_install:'Install',
-  eyebrow_rel:'OFFICIAL RELEASE',
+  brand:'MWI Market Mate', nav_features:'Features', nav_v2:'2.1.0', nav_guide:'Guide', nav_install:'Install',
+  eyebrow_rel:'STABILITY UPDATE',
   hero_h1:'Shortages,<br>down to the <span class="gd">last unit</span>.',
   hero_sub:'A crafting shortage calculator and manual purchasing assistant for Milky Way Idle. Reads the game data layer directly, factors in Artisan Tea and Guzzling Pouch, one click to the shopping list — purchasing always stays in your hands.',
   cta_install:'Install on GreasyFork', cta_guide:'Read the guide',
@@ -465,25 +466,25 @@ var EN={
   comp_no_h:'What rule-breakers do', comp_no_p:'One-click batch purchasing of multiple items, sending bulk requests to the server — that is automation. This plugin doesn\'t do it. Ever.',
   comp_tail:'All purchases must be performed <b>manually</b> by the player.',
   feat_eyebrow:'FEATURES', feat_h:'Everything between "how much" and "bought"',
-  feat_sub:'Open any crafting panel and badges grow right on the material rows; shortages go to the list in one click, and the list walks you through the market — every step visible, every step yours.',
+  feat_sub:'Open any crafting panel and badges grow right on the material rows; shortages go to the list in one click, 和 the list walks you through the market — every step visible, every step yours.'，
   f1_h:'Shortage calc, to the unit', f1_p:'Reads the game data layer directly — no screen-text parsing. Artisan Tea and Guzzling Pouch auto-applied, optional Z-score margin (90%–99.9%); three-layer injection defense keeps numbers sane alongside other plugins.',
-  f2_h:'Full panel coverage', f2_p:'Crafting, alchemy (Coinify / Decompose / Transmute), house building, and detail popups opened from the market or inventory — badges everywhere.',
+  f2_h:'Full panel coverage', f2_p:'Crafting, alchemy (Coinify / Decompose / Transmute), house building, 和 detail popups opened from the market or inventory — badges everywhere.',
   f3_h:'Shopping list', f3_p:'Desktop rail / mobile drawer dual-form UI, live market prices and estimated total; precise WebSocket inventory tracking, auto-deduct on purchase, auto-collapse when done.',
   f4_h:'Purchasing pipeline', f4_p:'Market dialogs pre-fill quantities, a fulfilled banner queues the next item, a custom shortcut jumps straight there — all manually triggered by you.',
   f5_h:'Plans & upgrade chains', f5_p:'Crafting plans lock material inventory, fixing shared-material miscalculation for good; upgrade chain tree view with per-step plans, locks released on completion.',
   f6_h:'Interop & diagnostics', f6_p:'Public API <code>window.MWIMM</code> for other scripts; one <code>__log()</code> exports full diagnostics — reporting an issue is one paste away.',
   st1:'regression tests guard every release', st2:'automated actions — zero compromise', st3:'shortage error, accurate to the unit', st4:'languages, following the game',
-  v2_h:'2.0.0: architecture upgrade + stability overhaul', v2_sub:'The official release after a dozen candidate builds. Full changelog on GreasyFork.',
-  v2a_h:'Brand-new UI', v2a_p:'Shadow DOM dual-form shell, fully isolated from the game and other plugins; settings apply instantly and auto-save.',
-  v2b_h:'Alchemy & popup support', v2b_p:'Coinify / Decompose / Transmute calculated with correct alchemy semantics; detail popups opened anywhere get badges and the list panel.',
-  v2c_h:'Badge self-healing', v2c_p:'If anything wipes the badges by any means, they\'re restored within 1 second — per-row integrity checks + a per-second watchdog + refresh on tab re-focus.',
-  v2d_h:'Diagnostics suite', v2d_p:'__log / __probe / __key / __selftest — one command exports full diagnostics; reporting an issue is one paste away.',
+  v2_h:'2.1.0: full panel coverage, conflict-proof', v2_sub:'A stability-focused release on top of the 2.0.0 architecture — alchemy / enhancement panels covered, 和 badge-freezing alongside third-party plugins eliminated. Full changelog on GreasyFork.',
+  v2a_h:'Alchemy & enhancement covered', v2a_p:'Badges and the "Add to cart" button no longer go missing on alchemy (Coinify / Decompose / Transmute) and enhancement panels — the same coverage as crafting.',
+  v2b_h:'Conflict-proof', v2b_p:'After a market round-trip, badges no longer freeze or vanish — even alongside plugins that inject content into the panel. The refresh-starvation root cause behind it is fixed for good.',
+  v2c_h:'Data-layer recipe ID', v2c_p:'Recipe identity is now read via React Fiber instead of inferred from on-screen text or class names — more robust detection and coexistence with other plugins.',
+  v2d_h:'Watchdog upgrades', v2d_p:'Instant refresh when the market dialog opens / closes, a forced redraw when a reused panel switches recipe; __log() gains a debounce diagnostic counter.',
   ins_eyebrow:'INSTALL', ins_h:'Set up in two minutes',
   i1_h:'Install a script manager', i1_p:'Add the Tampermonkey extension to your browser — Chrome, Edge or Firefox.',
   i2_h:'Install Market Mate', i2_p:'Open the GreasyFork page and click "Install this script". Zero configuration.',
   i3_h:'Open a crafting panel', i3_p:'Enter the game and open any crafting panel — the badges are already waiting.',
-  cta_install2:'Install v2.0.0 on GreasyFork',
-  ft_about:'About', ft_about_p:'MWI Market Mate is built and maintained by ColaCola. Accurate, unkillable, observable — the three promises of 2.0.0.',
+  cta_install2:'Install v2.1.0 on GreasyFork',
+  ft_about:'About', ft_about_p:'MWI Market Mate is built and maintained by ColaCola. Accurate, unkillable, observable — the three promises of 2.1.0.',
   ft_thx:'Acknowledgments', ft_thx_p:'Ideas: Mooooooooo, AlphB, wangchyan, mutallip, Foreversunny & friends, Joey, baozi, Star<br>Bug reports: Neilyo, ccat, SuxingX🐊',
   ft_fb:'Feedback', ft_fb_p:'Hit a problem? Run <code>MWIMM.__log()</code> in F12 and paste the output on the <a href="https://greasyfork.org/en/scripts/567386/feedback">GreasyFork feedback page</a>.',
   ft_fine:'Unofficial tool, not affiliated with Milky Way Idle'
